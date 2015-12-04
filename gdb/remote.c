@@ -2175,6 +2175,8 @@ static void
 set_general_thread (struct ptid ptid)
 {
   set_thread (ptid, 1);
+
+  observer_notify_target_thread_changed (ptid);
 }
 
 static void
@@ -7036,6 +7038,8 @@ remote_wait (struct target_ops *ops,
       if (!QUEUE_is_empty (stop_reply_p, stop_reply_queue))
 	mark_async_event_handler (remote_async_inferior_event_token);
     }
+
+  observer_notify_target_thread_changed (event_ptid);
 
   return event_ptid;
 }

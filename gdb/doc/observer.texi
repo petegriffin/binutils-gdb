@@ -311,3 +311,10 @@ See testsuite/gdb.gdb/observer.exp.
 The user-selected inferior, thread and/or frame has changed.  The user_select_what
 flag specifies if the inferior, thread and/or frame has changed.
 @end deftypefun
+
+@deftypefun void target_thread_changed (ptid_t @var{somearg})
+The target has changed its current thread to ptid_t. Used by linux-kthread and called
+by remote interfaces.
+@end deftypefun
+
+
