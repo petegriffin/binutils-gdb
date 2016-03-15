@@ -41,6 +41,7 @@
 #include "arm-tdep.h"
 #include "arm-linux-tdep.h"
 #include "linux-tdep.h"
+#include "linux-kthread.h"
 #include "glibc-tdep.h"
 #include "arch-utils.h"
 #include "inferior.h"
@@ -1724,6 +1725,41 @@ arm_linux_skip_trampoline_code (struct frame_info *frame, CORE_ADDR pc)
   return find_solib_trampoline_target (frame, pc);
 }
 
+
+
+
+static void
+arm_linux_supply_thread (struct regcache *regcache,
+			 int regnum, CORE_ADDR addr)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR sp = 0;
+  gdb_byte buf[8];
+  int i;
+
+  gdb_assert (regnum >= -1);
+
+  gdb_assert (0);
+
+}
+
+static void
+arm_linux_collect_thread (const struct regcache *regcache,
+			   int regnum, CORE_ADDR addr)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR sp = 0;
+  gdb_byte buf[8];
+  int i;
+
+  gdb_assert (regnum >= -1);
+
+  gdb_assert (0);
+
+}
+
 static void
 arm_linux_init_abi (struct gdbarch_info info,
 		    struct gdbarch *gdbarch)
@@ -2006,6 +2042,11 @@ arm_linux_init_abi (struct gdbarch_info info,
   arm_linux_record_tdep.arg5 = ARM_A1_REGNUM + 4;
   arm_linux_record_tdep.arg6 = ARM_A1_REGNUM + 5;
   arm_linux_record_tdep.arg7 = ARM_A1_REGNUM + 6;
+
+  /* Provide a Linux Kernel threads implementation.  */
+  linux_kthread_set_supply_thread (gdbarch, arm_linux_supply_thread);
+  linux_kthread_set_collect_thread (gdbarch, arm_linux_collect_thread);
+
 }
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
