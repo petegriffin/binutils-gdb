@@ -34,6 +34,9 @@
 /* Save the linux_kthreads ops returned by linux_kthread_target.  */
 static struct target_ops *linux_kthread_ops;
 
+/* Non-zero if the thread stratum implemented by this module is active.  */
+static int linux_kthread_active;
+
 /* Architecture-specific operations.  */
 
 /* Per-architecture data key.  */
@@ -96,9 +99,6 @@ ptid_to_str (ptid_t ptid)
 
   return str;
 }
-
-/* Non-zero if the thread stratum implemented by this module is active.  */
-static int linux_kthread_active;
 
 /* If OBJFILE contains the symbols corresponding to one of the
    supported user-level threads libraries, activate the thread stratum
