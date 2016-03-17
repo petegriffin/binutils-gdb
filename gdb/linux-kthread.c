@@ -100,6 +100,122 @@ ptid_to_str (ptid_t ptid)
   return str;
 }
 
+/* Symbol and Field resolutions */
+
+/* Storage for the field layout and addresses already gathered. */
+static struct field_info *field_info;
+static struct addr_info *addr_info;
+
+/* Called by ADDR to fetch the address of a symbol declared using
+ DECLARE_ADDR. */
+int
+linux_init_addr (struct addr_info *addr, int check)
+{
+  if (addr->bmsym.minsym)
+    return 1;
+
+  addr->bmsym = lookup_minimal_symbol (addr->name, NULL, NULL);
+
+  if (!addr->bmsym.minsym)
+    {
+      if (!check)
+	error ("Couldn't find address of %s", addr->name);
+      return 0;
+    }
+
+  /* Chain initialized entries for cleanup. */
+  addr->next = addr_info;
+  addr_info = addr;
+
+  return 1;
+}
+
+/* Helper for linux_init_field. */
+static int
+find_struct_field (struct type *type, char *field, int *offset, int *size)
+{
+  int i;
+
+  for (i = 0; i < TYPE_NFIELDS (type); ++i)
+    {
+      if (!strcmp (FIELD_NAME (TYPE_FIELDS (type)[i]), field))
+	break;
+    }
+
+  if (i >= TYPE_NFIELDS (type))
+    return 0;
+
+  *offset = FIELD_BITPOS (TYPE_FIELDS (type)[i]) / TARGET_CHAR_BIT;
+  *size = TYPE_LENGTH (check_typedef (TYPE_FIELDS (type)[i].type));
+  return 1;
+}
+
+/* Called by F_OFFSET or F_SIZE to compute the description of a field
+ declared using DECLARE_FIELD. */
+int
+linux_init_field (struct field_info *field, int check)
+{
+  if (field->type != NULL)
+    return 1;
+
+  field->type =
+    lookup_symbol (field->struct_name, NULL, STRUCT_DOMAIN, NULL).symbol;
+  if (!field->type)
+    {
+      field->type = lookup_symbol (field->struct_name,
+				   NULL, VAR_DOMAIN, NULL).symbol;
+
+      if (field->type
+	  && TYPE_CODE (check_typedef (SYMBOL_TYPE (field->type)))
+	  != TYPE_CODE_STRUCT)
+	field->type = NULL;
+    }
+
+  if (field->type == NULL
+      || !find_struct_field (check_typedef (SYMBOL_TYPE (field->type)),
+			     field->field_name, &field->offset, &field->size))
+    {
+      field->type = NULL;
+      if (!check)
+	error ("No such field %s::%s\n", field->struct_name,
+	       field->field_name);
+
+      return 0;
+    }
+
+  /* Chain initialized entries for cleanup. */
+  field->next = field_info;
+  field_info = field;
+
+  return 1;
+}
+
+/* Cleanup all the field and address info that has been gathered. */
+static void
+fields_and_addrs_clear (void)
+{
+  struct field_info *next_field = field_info;
+  struct addr_info *next_addr = addr_info;
+
+  while (next_field)
+    {
+      next_field = field_info->next;
+      field_info->type = NULL;
+      field_info->next = NULL;
+      field_info = next_field;
+    }
+
+  while (next_addr)
+    {
+      next_addr = addr_info->next;
+      addr_info->bmsym.minsym = NULL;
+      addr_info->bmsym.objfile = NULL;
+      addr_info->next = NULL;
+      addr_info = next_addr;
+    }
+}
+
+
 /* If OBJFILE contains the symbols corresponding to one of the
    supported user-level threads libraries, activate the thread stratum
    implemented by this module.  */
@@ -133,7 +249,9 @@ static void
 linux_kthread_close (struct target_ops *self)
 {
   linux_kthread_active = 0;
+
   /* Reset global variables */
+  fields_and_addrs_clear ();
 }
 
 /* Deactivate the thread stratum implemented by this module.  */
