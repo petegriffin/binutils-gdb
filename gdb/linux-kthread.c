@@ -28,6 +28,15 @@
 
 #include "gdb_obstack.h"
 
+#define DEBUG_LINUX_KTHREAD
+#ifdef DEBUG_LINUX_KTHREAD
+#define ENTER() do { printf_unfiltered("Enter %s:%d\n", __FUNCTION__, __LINE__); } while (0)
+#define DEBUG(d,l,fmt, args...) do { printf_unfiltered("%s:%d: " fmt, __FUNCTION__, __LINE__, ##args); } while (0)
+
+#else
+#define ENTER() do { } while (0)
+#define DEBUG(d,l, fmt, args...) do { } while (0)
+#endif
 
 #include "linux-kthread.h"
 
@@ -118,6 +127,7 @@ linux_init_addr (struct addr_info *addr, int check)
 
   if (!addr->bmsym.minsym)
     {
+      DEBUG (INIT, 3, "Checking for address of '%s' : NOT FOUND\n", addr->name);
       if (!check)
 	error ("Couldn't find address of %s", addr->name);
       return 0;
@@ -126,6 +136,9 @@ linux_init_addr (struct addr_info *addr, int check)
   /* Chain initialized entries for cleanup. */
   addr->next = addr_info;
   addr_info = addr;
+
+  DEBUG (INIT, 1, "%s address is %s\n", addr->name,
+	 phex (BMSYMBOL_VALUE_ADDRESS (addr->bmsym), 4));
 
   return 1;
 }
@@ -160,7 +173,11 @@ linux_init_field (struct field_info *field, int check)
 
   field->type =
     lookup_symbol (field->struct_name, NULL, STRUCT_DOMAIN, NULL).symbol;
-  if (!field->type)
+  if (field->type)
+    {
+      DEBUG (INIT, 1, "Checking for 'struct %s' : OK\n", field->struct_name);
+    }
+  else
     {
       field->type = lookup_symbol (field->struct_name,
 				   NULL, VAR_DOMAIN, NULL).symbol;
@@ -169,6 +186,11 @@ linux_init_field (struct field_info *field, int check)
 	  && TYPE_CODE (check_typedef (SYMBOL_TYPE (field->type)))
 	  != TYPE_CODE_STRUCT)
 	field->type = NULL;
+
+      if (field->type != NULL)
+	DEBUG (INIT, 1, "Checking for 'struct %s' : TYPEDEF\n", field->struct_name);
+      else
+	DEBUG (INIT, 1, "Checking for 'struct %s' : NOT FOUND\n", field->struct_name);
     }
 
   if (field->type == NULL
@@ -187,6 +209,8 @@ linux_init_field (struct field_info *field, int check)
   field->next = field_info;
   field_info = field;
 
+  DEBUG (INIT, 2, "%s::%s => offset %i  size %i\n", field->struct_name,
+	 field->field_name, field->offset, field->size);
   return 1;
 }
 
