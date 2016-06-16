@@ -979,7 +979,7 @@ is_thread_state (ptid_t ptid, enum thread_state state)
   struct thread_info *tp;
 
   tp = find_thread_ptid (ptid);
-  gdb_assert (tp);
+  //  gdb_assert (tp);
   return tp->state == state;
 }
 

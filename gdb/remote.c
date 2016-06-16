@@ -3256,6 +3256,7 @@ remote_update_thread_list (struct target_ops *ops)
 	  if (i == VEC_length (thread_item_t, context.items))
 	    {
 	      /* Not found.  */
+	      printf_unfiltered("\n *** *%s: delete_thread %p\n",__func__,tp);
 	      delete_thread (tp->ptid);
 	    }
 	}
