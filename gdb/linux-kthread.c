@@ -881,7 +881,7 @@ lkd_proc_refresh_info (int cur_core)
 	 last_pid, process_counts[0], process_counts[1]);
 
   if (do_invalidate)
-    lkd_proc_invalidate_list ();
+      lkd_proc_invalidate_list ();
 
   /* Update the process_list now, so that init_task is in there. */
   (void) lkd_proc_get_list ();
@@ -1075,9 +1075,9 @@ lkd_proc_get_by_ptid (ptid_t ptid)
   long lwp = ptid_get_lwp(ptid);
   process_t *ps;
 
-  //  DEBUG (INIT, 1, "()+\n");
+  DEBUG (INIT, 1, "()+\n");
 
-  //check list is valid
+  /* check list is valid */
   gdb_assert(!lkd_private.proc_list_invalid);
 
   /* We must ensure that we don't try to return
@@ -1169,8 +1169,6 @@ linux_kthread_activate (struct objfile *objfile)
 
   DEBUG (INIT, 1, "()+\n");
 
-  printf_filtered ("%s:%d\n",__func__, __LINE__);
-
   /* Skip if the thread stratum has already been activated.  */
   if (linux_kthread_active)
     return 0;
@@ -1181,7 +1179,6 @@ linux_kthread_activate (struct objfile *objfile)
     return 0;
 
   /* Verify that this represents an appropriate linux target */
-
 
   /* Initialise any data before we push */
   memset (&lkd_private, 0, sizeof(lkd_private));
@@ -1558,7 +1555,6 @@ _initialize_linux_kthread (void)
   linux_kthread_data = gdbarch_data_register_pre_init (linux_kthread_init);
 
   observer_attach_inferior_created (linux_kthread_inferior_created);
-
 
   target_thread_ptid = null_ptid;
   observer_attach_target_thread_changed (linux_awareness_target_thread_changed);
