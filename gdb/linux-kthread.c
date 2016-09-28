@@ -1370,6 +1370,9 @@ linux_kthread_resume (struct target_ops *ops,
   DEBUG (TARGET, 1, "Resuming %i with sig %i (step %i)\n",
 	 (int) ptid_get_pid (ptid), (int) sig, step);
 
+  /* switch back to hw thread  to avoid gdbremote errors */
+  switch_to_thread(PTID_OF (wait_process));
+
   beneath->to_resume (beneath, ptid, step, sig);
 }
 
