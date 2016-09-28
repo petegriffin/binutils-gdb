@@ -1408,18 +1408,10 @@ linux_kthread_update_thread_list (struct target_ops *ops)
 
   DEBUG (INIT, 1, "()+\n");
 
-  /* List is up to date ... ? */
-  if (!lkd_private.proc_list_invalid)
-    return;
-
-  prune_threads ();
-
-  /* Allow the layer beneath to update */
-  if (beneath && beneath->to_update_thread_list)
-    beneath->to_update_thread_list (beneath);
-
   /* Build linux threads on top */
   lkd_proc_get_list ();
+
+  prune_threads ();
 
   DEBUG (INIT, 1, "()-\n");
 }
