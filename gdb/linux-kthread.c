@@ -1384,12 +1384,21 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   struct target_ops *beneath = find_target_beneath (ops);
+  process_t *ps;
 
   //  DEBUG (INIT, 1, "()+\n");
 
   //  DEBUG (INIT, 1, "()-\n");
   //return beneath->to_thread_alive (beneath, ptid);
-  return (lkd_proc_get_by_ptid (ptid) != NULL);
+  ps = lkd_proc_get_by_ptid (ptid);
+
+  if (!ps)
+    {
+      DEBUG (INIT, 1, "Prune thread ps(%p)\n",ps);
+      return 0;
+    }
+
+  return 1;
 }
 
 static void
