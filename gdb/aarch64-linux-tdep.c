@@ -45,6 +45,7 @@
 
 #include "record-full.h"
 #include "linux-record.h"
+#include "linux-kthread.h"
 
 /* Signal frame handling.
 
@@ -985,6 +986,92 @@ aarch64_linux_syscall_record (struct regcache *regcache,
   return 0;
 }
 
+/* From arm64/include/asm/processor.h */
+struct cpu_context {
+	unsigned long x19;
+	unsigned long x20;
+	unsigned long x21;
+	unsigned long x22;
+	unsigned long x23;
+	unsigned long x24;
+	unsigned long x25;
+	unsigned long x26;
+	unsigned long x27;
+	unsigned long x28;
+	unsigned long fp;
+	unsigned long sp;
+	unsigned long pc;
+} cpu_cxt;
+
+static void
+aarch64_linux_supply_thread (struct regcache *regcache,
+			 int regnum, CORE_ADDR task_struct)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+
+  CORE_ADDR sp = 0;
+  gdb_byte buf[8];
+  int i;
+  uint32_t cpsr;
+  uint32_t thread_info_addr;
+
+  DECLARE_FIELD (thread_info, cpu_context);
+  DECLARE_FIELD (task_struct, stack);
+
+  gdb_assert (regnum >= -1);
+
+  /*get thread_info address */
+  thread_info_addr = read_unsigned_field (task_struct, task_struct, stack);
+
+  /*get cpu_context as saved by scheduled */
+  read_memory ((CORE_ADDR) thread_info_addr +
+	       F_OFFSET (thread_info, cpu_context),
+	       (gdb_byte *) & cpu_cxt, sizeof (struct cpu_context));
+
+  regcache_raw_supply (regcache, ARM_PC_REGNUM, &cpu_cxt.pc);
+  regcache_raw_supply (regcache, ARM_SP_REGNUM, &cpu_cxt.sp);
+  regcache_raw_supply (regcache, ARM_FP_REGNUM, &cpu_cxt.fp);
+
+  /*general purpose registers */
+  regcache_raw_supply (regcache, 10, &cpu_cxt.x28);
+  regcache_raw_supply (regcache, 9, &cpu_cxt.x27);
+  regcache_raw_supply (regcache, 8, &cpu_cxt.x26);
+  regcache_raw_supply (regcache, 7, &cpu_cxt.x25);
+  regcache_raw_supply (regcache, 6, &cpu_cxt.x24);
+  regcache_raw_supply (regcache, 5, &cpu_cxt.x23);
+  regcache_raw_supply (regcache, 4, &cpu_cxt.x22);
+  regcache_raw_supply (regcache, 4, &cpu_cxt.x21);
+  regcache_raw_supply (regcache, 4, &cpu_cxt.x20);
+  regcache_raw_supply (regcache, 4, &cpu_cxt.x19);
+
+  /* Fake a value for cpsr:T bit.  */
+#define IS_THUMB_ADDR(addr)	((addr) & 1)
+  cpsr = IS_THUMB_ADDR(cpu_cxt.pc) ? arm_psr_thumb_bit (target_gdbarch ()) : 0;
+  regcache_raw_supply (regcache, ARM_PS_REGNUM, &cpsr);
+
+  for (i = 0; i < gdbarch_num_regs (target_gdbarch ()); i++)
+    if (REG_VALID != regcache_register_status (regcache, i))
+      /* Mark other registers as unavailable.  */
+      regcache_invalidate (regcache, i);
+}
+
+static void
+aarch64_linux_collect_thread (const struct regcache *regcache,
+			   int regnum, CORE_ADDR addr)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR sp = 0;
+  gdb_byte buf[8];
+  int i;
+
+  gdb_assert (regnum >= -1);
+
+  gdb_assert (0);
+
+}
+
 static void
 aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
@@ -1209,6 +1296,10 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_displaced_step_location (gdbarch, linux_displaced_step_location);
   set_gdbarch_displaced_step_hw_singlestep (gdbarch,
 					    aarch64_displaced_step_hw_singlestep);
+
+  /* Provide a Linux Kernel threads implementation.  */
+  linux_kthread_set_supply_thread (gdbarch, aarch64_linux_supply_thread);
+  linux_kthread_set_collect_thread (gdbarch, aarch64_linux_collect_thread);
 }
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
