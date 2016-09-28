@@ -1205,13 +1205,12 @@ linux_kthread_activate (struct objfile *objfile)
   /* scan the linux threads */
 
   if (!lkd_proc_refresh_info (stop_core))
-	{
-	  //	  if (from_tty)
-	  //	    printf_filtered ("failed: has this kernel started?\n");
-	  printf_filtered ("lkd_proc_refresh_info failed?\n");
-	}
-
-  printf_filtered ("%s:%d\n",__func__, __LINE__);
+    {
+      /* don't activate linux-kthread as no threads were found */
+      lkd_proc_invalidate_list ();
+      prune_threads();
+      return 0;
+    }
 
   push_target (linux_kthread_ops);
   linux_kthread_active = 1;
