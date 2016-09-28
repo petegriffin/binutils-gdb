@@ -1199,7 +1199,8 @@ linux_kthread_activate (struct objfile *objfile)
   /* TODO: Need arch specific callback (to check MMU / VM support etc) */
 
   printf_filtered ("%s:%d\n",__func__, __LINE__);
- 
+
+  lkd_proc_invalidate_list ();
 
   /* scan the linux threads */
 
