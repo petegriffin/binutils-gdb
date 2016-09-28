@@ -886,11 +886,14 @@ lkd_proc_refresh_info (int cur_core)
   /* Update the process_list now, so that init_task is in there. */
   (void) lkd_proc_get_list ();
 
-  /* Call update to prune gdb_thread no longer linked to a linux task.*/
-  //  if (lkd_private.loaded == LKD_LOADED)
+  /* Call update_thread_list() to prune GDB threads which are no longer linked
+   * to a Linux task no longer linked to a linux task. */
 
-  /* this actually ends up deleting all the threads again :-( */
-  // update_thread_list();
+  /* TODO: This API call can end up deleting all the kthreads when connected
+   * to QEMU gdbremote. But without it we don't correctly prune threads
+   * when connected to OpenOCD. Needs further debugging.
+  */
+  update_thread_list();
 
   /* Set the running process
    *
