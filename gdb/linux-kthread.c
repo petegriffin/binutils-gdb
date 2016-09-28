@@ -1194,9 +1194,9 @@ linux_kthread_activate (struct objfile *objfile)
 
   lkd_proc_init ();
 
-  //check kernel in memory batches vmlinux
+  /* TODO: check kernel in memory batches vmlinux (Linux banner etc?) */
 
-  lkd_proc_invalidate_list ();
+  /* TODO: Need arch specific callback (to check MMU / VM support etc) */
 
   printf_filtered ("%s:%d\n",__func__, __LINE__);
  
