@@ -861,6 +861,15 @@ lkd_proc_refresh_info (int cur_core)
   for (i = 0; i < max_cores; i++)
     {
       int new_pcount = get_process_count (i);
+
+      /* if primary core has no processes kernel hasn't started */
+      if (i == 0 && new_pcount == 0)
+	{
+	  warning ("Primary core has no processes - has kernel started?\n");
+	  warning ("linux-kthread will deactivate\n");
+	  return 0;
+	}
+
       if (new_pcount != process_counts[i])
 	{
 	  process_counts[i] = new_pcount;
