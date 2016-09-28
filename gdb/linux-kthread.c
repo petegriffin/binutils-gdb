@@ -1434,10 +1434,8 @@ linux_kthread_extra_thread_info (struct target_ops *self,
       len = snprintf (msg, PRINT_CELL_SIZE, "pid: %li tgid: %i",
 		      lkd_ptid_to_pid (PTID_OF (ps)), ps->tgid);
 
-#if 0
       if (lkd_proc_is_curr_task (ps))
 	snprintf (msg + len, PRINT_CELL_SIZE - len, " <C%u>", ps->core);
-#endif
 
       return msg;
     }
