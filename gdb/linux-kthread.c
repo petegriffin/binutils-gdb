@@ -1500,11 +1500,15 @@ linux_kthread_target (void)
   t->to_doc = "Linux kernel-level threads";
   t->to_close = linux_kthread_close;
   t->to_mourn_inferior = linux_kthread_mourn_inferior;
+  /* Registers */
   t->to_fetch_registers = linux_kthread_fetch_registers;
   t->to_store_registers = linux_kthread_store_registers;
+
+  /* Execution */
   t->to_wait = linux_kthread_wait;
   t->to_resume = linux_kthread_resume;
 
+  /* Threads */
   t->to_thread_alive = linux_kthread_thread_alive;
   t->to_update_thread_list = linux_kthread_update_thread_list;
   t->to_extra_thread_info = linux_kthread_extra_thread_info;
