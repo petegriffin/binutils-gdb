@@ -28,7 +28,7 @@
 
 #include "gdb_obstack.h"
 
-#define DEBUG_LINUX_KTHREAD
+//#define DEBUG_LINUX_KTHREAD
 #ifdef DEBUG_LINUX_KTHREAD
 #define ENTER() do { printf_unfiltered("Enter %s:%d\n", __FUNCTION__, __LINE__); } while (0)
 #define DEBUG(d,l,fmt, args...) do { printf_unfiltered("%s:%d: " fmt, __FUNCTION__, __LINE__, ##args); } while (0)
@@ -1169,6 +1169,8 @@ linux_kthread_activate (struct objfile *objfile)
 
   DEBUG (INIT, 1, "()+\n");
 
+  return 0;
+
   /* Skip if the thread stratum has already been activated.  */
   if (linux_kthread_active)
     return 0;
@@ -1431,8 +1433,12 @@ linux_kthread_extra_thread_info (struct target_ops *self,
       len = snprintf (msg, PRINT_CELL_SIZE, "pid: %li tgid: %i",
 		      lkd_ptid_to_pid (PTID_OF (ps)), ps->tgid);
 
+      /*
+	don't do anything special this could come from xml threads.dtd
+
       if (lkd_proc_is_curr_task (ps))
 	snprintf (msg + len, PRINT_CELL_SIZE - len, " <C%u>", ps->core);
+      */
 
       return msg;
     }
