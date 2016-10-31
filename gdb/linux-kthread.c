@@ -311,6 +311,14 @@ DECLARE_FIELD (rq, curr);
 DECLARE_FIELD (rq, idle);
 DECLARE_FIELD (rq, lock);
 DECLARE_FIELD (raw_spinlock, magic);
+
+/* asm/generic/percpu.h
+ * per_cpu_offset() is the offset that has to be added to a
+ * percpu variable to get to the instance for a certain processor.
+ * Most arches use the __per_cpu_offset array for those offsets but
+ * some arches have their own ways of determining the offset (x86_64, s390).
+ */
+
 DECLARE_ADDR (__per_cpu_offset);
 DECLARE_ADDR (per_cpu__process_counts);
 DECLARE_ADDR (process_counts);
@@ -318,6 +326,7 @@ DECLARE_ADDR (per_cpu__runqueues);
 DECLARE_ADDR (runqueues);
 
 
+/* TODO dynamically allocate memory based on thread_count() */
 #define MAX_CORES 5
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
 int max_cores = MAX_CORES;
@@ -755,6 +764,7 @@ get_process_count (int core)
       return warned;
     }
 
+  /* TODO remove LKD_BYTE_ORDER. Also shouldn't hard code 4 here */
   proc_cnt = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
 					   LKD_BYTE_ORDER);
 
@@ -1066,7 +1076,8 @@ lkd_proc_get_list (void)
 }
 
 /* Returns a valid 'process_t' corresponding to
- * the passed ptid or NULL if not found.
+ * the passed ptid or NULL if not found. NULL means
+ * the thread needs to be pruned.
  */
 process_t *
 lkd_proc_get_by_ptid (ptid_t ptid)
