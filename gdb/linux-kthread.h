@@ -113,16 +113,14 @@ linux_get_field_size (struct field_info *field)
 				|| (linux_init_field(&FIELD_INFO(struct, field), 1), \
 						FIELD_INFO(struct, field).type != NULL))
 
-#define ADDR_INFO(symb) _ADDR_##symb
-
 #define DECLARE_ADDR(symb) \
-		static struct addr_info ADDR_INFO(symb) = { .name = #symb, .bmsym = {NULL, NULL} }
+		static struct addr_info symb = { .name = #symb, .bmsym = {NULL, NULL} }
 
 #define HAS_ADDR(symb) \
-		(ADDR_INFO(symb).bmsym.minsym != NULL \
-				|| (linux_init_addr(&ADDR_INFO(symb), 1), ADDR_INFO(symb).bmsym.minsym != NULL))
+		(symb.bmsym.minsym != NULL \
+				|| (linux_init_addr(&symb, 1), symb.bmsym.minsym != NULL))
 
-#define ADDR(sym) linux_get_address (&ADDR_INFO(sym))
+#define ADDR(sym) linux_get_address (&sym)
 
 #define read_unsigned_field(base, struct, field) \
 		read_memory_unsigned_integer (base + F_OFFSET (struct, field), \
