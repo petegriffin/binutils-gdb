@@ -344,7 +344,7 @@ CORE_ADDR rq_curr[MAX_CORES];	/*cur_rq(cpu) */
 CORE_ADDR rq_idle[MAX_CORES];	/*rq->idle */
 
 /* process list housekeeping*/
-static int process_counts[MAX_CORES];
+static unsigned long kthread_process_counts[MAX_CORES];
 static int last_pid;
 
 #if 0
@@ -860,7 +860,7 @@ lkd_proc_refresh_info (int cur_core)
   memset (rq_curr, 0, max_cores * sizeof (CORE_ADDR));
 
   DEBUG (TASK, 1, "WAS: last_pid=%d, pcount[0]=%d, pcount[1]=%d\n",
-	 last_pid, process_counts[0], process_counts[1]);
+	 last_pid, kthread_process_counts[0], kthread_process_counts[1]);
 
   new_last_pid = get_last_pid ();
   if (new_last_pid != last_pid)
@@ -882,15 +882,15 @@ lkd_proc_refresh_info (int cur_core)
 	  return 0;
 	}
 
-      if (new_pcount != process_counts[i])
+      if (new_pcount != kthread_process_counts[i])
 	{
-	  process_counts[i] = new_pcount;
+	  kthread_process_counts[i] = new_pcount;
 	  do_invalidate = 1;
 	}
     }
 
-  DEBUG (TASK, 1, "NEW: last_pid=%d, pcount[0]=%d, pcount[1]=%d\n",
-	 last_pid, process_counts[0], process_counts[1]);
+  DEBUG (TASK, 1, "NEW: last_pid=%d, pcount[0]=%d, pcount[1]=%d do_invalidate=%d\n",
+	 last_pid, kthread_process_counts[0], kthread_process_counts[1], do_invalidate);
 
   if (do_invalidate)
       lkd_proc_invalidate_list ();
