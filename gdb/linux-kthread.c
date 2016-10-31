@@ -347,6 +347,7 @@ CORE_ADDR rq_idle[MAX_CORES];	/*rq->idle */
 static int process_counts[MAX_CORES];
 static int last_pid;
 
+#if 0
 static int
 find_thread_lkd_pid (struct thread_info *tp, void *arg)
 {
@@ -354,6 +355,7 @@ find_thread_lkd_pid (struct thread_info *tp, void *arg)
 
   return (lkd_ptid_to_pid(tp->ptid) == pid);
 }
+#endif
 
 static int
 find_thread_lwp (struct thread_info *tp, void *arg)
