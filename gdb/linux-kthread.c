@@ -905,7 +905,8 @@ lkd_proc_refresh_info (int cur_core)
    * to QEMU gdbremote. But without it we don't correctly prune threads
    * when connected to OpenOCD. Needs further debugging.
   */
-  update_thread_list();
+  if (linux_kthread_active)
+    update_thread_list();
 
   /* Set the running process
    *
