@@ -26,6 +26,7 @@ struct addr_info
 {
   char *name;
   struct bound_minimal_symbol bmsym;
+  /* chained to allow easy cleanup */
   struct addr_info *next;
 };
 
@@ -36,6 +37,7 @@ struct field_info
   struct symbol *type;
   int offset;
   int size;
+  /* chained to allow easy cleanup */
   struct field_info *next;
 };
 
