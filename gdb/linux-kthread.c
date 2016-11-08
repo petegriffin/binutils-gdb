@@ -336,6 +336,7 @@ int max_cores = MAX_CORES;
 process_t *process_list = NULL;	/*the processes list from the linux prospective */
 process_t *wait_process = NULL;	/*process we stopped at in target_wait */
 process_t *running_process[MAX_CORES];	/*scheduled process as seen by each core */
+
 uint32_t per_cpu_offset[MAX_CORES]; /*__per_cpu_offset*/
 
 /* per cpu peeks */
@@ -780,7 +781,8 @@ get_process_count (int core)
   proc_cnt = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
 					   LKD_BYTE_ORDER);
 
-  DEBUG(TASK, 1, "proc_cnt=%d\n\n", proc_cnt);
+  DEBUG(TASK, 1, "core(%d) curr_addr=0x%lx proc_cnt=%d\n\n", core, curr_addr,
+	proc_cnt);
 
   return proc_cnt;
 };
@@ -845,6 +847,8 @@ lkd_proc_init (void)
     {
       DEBUG (INIT, 1, "Assuming non-SMP kernel.\n");
     }
+
+  DEBUG (INIT, 1, "SMP kernel. %d cores detected\n",max_cores);
 
   if (!lkd_proc_get_runqueues (1 /*reset */ ) && (max_cores > 1))
     printf_filtered ("\nCould not find the address of cpu runqueues:"
@@ -937,10 +941,8 @@ lkd_proc_refresh_info (int cur_core)
   if (!wait_process)
     return 0;
 
-  DEBUG (TASK, 1, "wait_process: comm = %s\n", wait_process->comm);
-  DEBUG (TASK, 1, "wait_process: lwp = %ld\n", ptid_get_lwp(PTID_OF (wait_process)));
-  DEBUG (TASK, 1, "wait_process: pid = %d\n", ptid_get_pid(PTID_OF (wait_process)));
-  DEBUG (TASK, 1, "wait_process: tid = %ld\n", ptid_get_tid(PTID_OF (wait_process)));
+  DEBUG (TASK, 1, "wait_process comm=%s ptid= %s\n", wait_process->comm,
+	 ptid_to_str(PTID_OF (wait_process)));
 
   gdb_assert(wait_process->gdb_thread);
 
@@ -1013,6 +1015,7 @@ get_list_helper (process_t ** ps)
         {
 
 #if 0
+	  /* todo replace with a arch specific helper which checks versus CONFIG_PAGEOFFSET */
           if (!linux_awareness_ops->lo_is_kernel_address (t))
 	    {
               warning ("parsing of task list stopped because of invalid address %s", phex (t, 4));
@@ -1202,6 +1205,8 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* Verify that this represents an appropriate linux target */
 
+  DEBUG (INIT, 1, "()+\n");
+
   /* Initialise any data before we push */
   memset (&lkd_private, 0, sizeof(lkd_private));
 
@@ -1213,7 +1218,9 @@ linux_kthread_activate (struct objfile *objfile)
 
   lkd_proc_init ();
 
-  /* TODO: check kernel in memory batches vmlinux (Linux banner etc?) */
+  DEBUG (INIT, 1, "()+\n");
+
+  /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
   /* TODO: Need arch specific callback (to check MMU / VM support etc) */
 
@@ -1221,15 +1228,21 @@ linux_kthread_activate (struct objfile *objfile)
 
   lkd_proc_invalidate_list ();
 
+  DEBUG (INIT, 1, "()+\n");
+
   /* scan the linux threads */
 
   if (!lkd_proc_refresh_info (stop_core))
     {
       /* don't activate linux-kthread as no threads were found */
       lkd_proc_invalidate_list ();
+
+      /*PAG thread.c */
       prune_threads();
       return 0;
     }
+
+  DEBUG (INIT, 1, "()+\n");
 
   push_target (linux_kthread_ops);
   linux_kthread_active = 1;
@@ -1392,6 +1405,8 @@ linux_kthread_resume (struct target_ops *ops,
   DEBUG (TARGET, 1, "Resuming %i with sig %i (step %i)\n",
 	 (int) ptid_get_pid (ptid), (int) sig, step);
 
+  DEBUG (TARGET, 1, "ptid= %s\n", ptid_to_str(ptid));
+
   /* switch back to hw thread  to avoid gdbremote errors */
   switch_to_thread(PTID_OF (wait_process));
 
@@ -1405,7 +1420,7 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
   struct target_ops *beneath = find_target_beneath (ops);
   process_t *ps;
 
-  //  DEBUG (INIT, 1, "()+\n");
+  DEBUG (TASK, 1, "ptid= %s ", ptid_to_str(ptid));
 
   //  DEBUG (INIT, 1, "()-\n");
   //return beneath->to_thread_alive (beneath, ptid);
@@ -1413,10 +1428,11 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
 
   if (!ps)
     {
-      DEBUG (INIT, 1, "Prune thread ps(%p)\n",ps);
+      DEBUG (TASK, 1, "\n ** PRUNE thread ps(%p)\n",ps);
       return 0;
     }
 
+  DEBUG (TASK, 1, "Alive thread ps(%p)\n",ps);
   return 1;
 }
 
@@ -1453,12 +1469,10 @@ linux_kthread_extra_thread_info (struct target_ops *self,
       len = snprintf (msg, PRINT_CELL_SIZE, "pid: %li tgid: %i",
 		      lkd_ptid_to_pid (PTID_OF (ps)), ps->tgid);
 
-      /*
-	don't do anything special this could come from xml threads.dtd
+      /* yao: don't do anything special this could come from xml threads.dtd */
 
       if (lkd_proc_is_curr_task (ps))
 	snprintf (msg + len, PRINT_CELL_SIZE - len, " <C%u>", ps->core);
-      */
 
       return msg;
     }
@@ -1472,13 +1486,17 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
   process_t *ps;
   struct thread_info *tp;
 
+  DEBUG (TARGET, 1, "ptid %s\n", ptid_to_str(ptid));
+
   if (!lkd_ptid_to_core (ptid))	/* when quitting typically */
     return "Linux Kernel";
 
   tp = find_thread_ptid (ptid);
 
-  if (!tp || !tp->priv)
+  if (!tp || !tp->priv) {
+    warning ("Suspicious !tp or !tp->priv");
     return "";
+  }
 
   /* we use the gdb thread private field for storing the process_t */
   ps = (process_t *) tp->priv;
@@ -1558,8 +1576,8 @@ static ptid_t target_thread_ptid;
 static void
 linux_awareness_target_thread_changed (ptid_t ptid)
 {
-  DEBUG (D_INIT, 1, "linux_awareness_target_thread_changed {%d, %ld, %ld}\n",
-  	 ptid_get_pid (ptid), ptid_get_lwp (ptid), ptid_get_tid (ptid));
+  /*  DEBUG (D_INIT, 1, "linux_awareness_target_thread_changed {%d, %ld, %ld}\n",
+      ptid_get_pid (ptid), ptid_get_lwp (ptid), ptid_get_tid (ptid));*/
 
   if (ptid_equal (ptid, null_ptid) || ptid_equal (ptid, minus_one_ptid))
     target_thread_ptid = null_ptid;
