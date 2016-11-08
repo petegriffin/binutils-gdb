@@ -1134,6 +1134,14 @@ thread_clear_info (struct thread_info *tp, void *ignored)
   return 0;
 }
 
+/* debug function to print thread info. */
+static int
+thread_print_info (struct thread_info *tp, void *ignored)
+{
+  DEBUG (INIT, 1, "thread_info = 0x%p ptid = %s\n", tp, ptid_to_str(tp->ptid));
+  return 0;
+}
+
 /* invalidate the cached task list. */
 void
 lkd_proc_invalidate_list (void)
@@ -1192,7 +1200,9 @@ linux_kthread_activate (struct objfile *objfile)
 
   DEBUG (INIT, 1, "()+\n");
 
-  return 0;
+  /*debug print to find pointer to hw threads */
+  DEBUG (INIT, 1, "GDB hw threads on startup \n");
+  iterate_over_threads (thread_print_info, NULL);
 
   /* Skip if the thread stratum has already been activated.  */
   if (linux_kthread_active)
