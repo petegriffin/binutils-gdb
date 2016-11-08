@@ -178,9 +178,7 @@ linux_get_field_size (struct field_info *field)
  *  ptid.lwp = Process ID
  *  ptid.tid = CPU Core (-1 for not running)
  *
- * This current naming, could cause some confusion between the inferior
- * PID and the Linux PID stored, but for now I'm going to accept that, until
- * I come up with a better name
+ * linux-kthread now matches the GDB remote usage.
  *
  * These macro's provide a level of indirection through the uses of LKD
  * accessing PTID structures. This allows clear identification of the aim
