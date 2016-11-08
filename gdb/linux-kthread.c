@@ -1418,7 +1418,10 @@ linux_kthread_resume (struct target_ops *ops,
   DEBUG (TARGET, 1, "ptid= %s\n", ptid_to_str(ptid));
 
   /* switch back to hw thread  to avoid gdbremote errors */
-  switch_to_thread(PTID_OF (wait_process));
+  //  switch_to_thread(PTID_OF (wait_process));
+
+  DEBUG (TARGET, 1, "switch_to_thread(wait_process) ptid= %s\n"
+	 , ptid_to_str(ptid));
 
   beneath->to_resume (beneath, ptid, step, sig);
 }
