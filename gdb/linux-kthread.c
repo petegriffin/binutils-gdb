@@ -1222,7 +1222,7 @@ linux_kthread_activate (struct objfile *objfile)
 
   lkd_private.string_buf_size = 4096;
   lkd_private.string_buf =
-    xcalloc (lkd_private.string_buf_size, sizeof (char));
+    (unsigned char *) xcalloc (lkd_private.string_buf_size, sizeof (char));
 
   lkd_private.proc_list_invalid = TRUE;
 
