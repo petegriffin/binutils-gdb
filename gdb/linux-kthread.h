@@ -186,7 +186,6 @@ linux_get_field_size (struct field_info *field)
  * swap usage if testing with an STMC in the short term.
  */
 
-#define lkd_ptid_build(inferior_pid, core, process) ptid_build(inferior_pid, core, process)
 
 #define lkd_ptid_to_core(ptid) ptid_get_lwp(ptid)
 #define lkd_ptid_to_pid(ptid) ptid_get_tid(ptid)
