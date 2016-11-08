@@ -809,7 +809,7 @@ lkd_proc_init (void)
   struct thread_info *th = NULL;
   struct cleanup *cleanup;
 
-  memset (per_cpu_offset, 0, MAX_CORES * sizeof (CORE_ADDR));
+  memset (per_cpu_offset, 0, MAX_CORES * sizeof (uint32_t));
   //  memset (mmu_info, 0, MAX_CORES * sizeof (struct mmu_infos));
 
   /* ensure thread list from beneath target is up to date */
