@@ -154,7 +154,7 @@ static char *
 ptid_to_str (ptid_t ptid)
 {
   static char str[32];
-  snprintf (str, sizeof (str) - 1, "%d:%ld:%ld",
+  snprintf (str, sizeof (str) - 1, "ptid %d: lwp %ld: tid %ld",
 	    ptid_get_pid (ptid), ptid_get_lwp (ptid), ptid_get_tid (ptid));
 
   return str;
