@@ -1224,6 +1224,12 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* scan the linux threads */
 
+  /* to get correct thread names from add_thread_with_info()
+     target_ops must be pushed before enumerating kthreads */
+
+  push_target (linux_kthread_ops);
+  linux_kthread_active = 1;
+
   if (!lkd_proc_refresh_info (stop_core))
     {
       /* don't activate linux-kthread as no threads were found */
@@ -1236,8 +1242,7 @@ linux_kthread_activate (struct objfile *objfile)
 
   DEBUG (INIT, 1, "()+\n");
 
-  push_target (linux_kthread_ops);
-  linux_kthread_active = 1;
+
 
   DEBUG (INIT, 1, "()-\n");
   return 1;
