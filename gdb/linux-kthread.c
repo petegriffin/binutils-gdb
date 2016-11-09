@@ -398,7 +398,7 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
   size_t size;
   unsigned char *task_name;
   int i = 0;
-  int tid = 0;
+  long tid = 0;
   ptid_t this_ptid;
 
   while (*ps && (*ps)->valid)
