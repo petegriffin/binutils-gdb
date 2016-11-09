@@ -57,39 +57,9 @@ static void lkd_proc_init (void);
 static void lkd_proc_free_list(void);
 static int lkd_proc_is_curr_task (process_t * ps);
 
-
-/* use scratch area for messing around with strings
- * to avoid static arrays and dispersed mallocs and frees
- **/
-static struct lkd_private_data
-{
-  //lkd_load_states_t loaded;
-  //int connected;
-  //int keep_do_exit_event;
-
-  unsigned char *string_buf;
-  int string_buf_size;
-
-  //char *banner_file;		/* string for the banner as read from vmlinx */
-  //int banner_file_size;		/* max size allocated */
-  //int banner_file_valid;	/* valid or to refresh */
-
-  int proc_list_invalid;
-
-  //char *banner_mem;		/* string for the banner as read from vmlinx */
-  //int banner_mem_size;		/* max size allocated */
-  //int banner_mem_valid;		/* valid or to refresh */
-
-  /* The UTS name as extracted from the file or the memory. This serves
-     to build the path that points to the depmod cache. */
-  //char *utsname_release;
-  //int utsname_release_size;	/* max size allocated */
-  //int utsname_release_valid;	/* valid or to refresh */
-
-  //struct type *target_pointer_type;
-
-  //uint32_t kflags;
-} lkd_private;
+static int kthread_list_invalid;
+static unsigned char *scratch_buf;
+static int scratch_buf_size;
 
 /* Save the linux_kthreads ops returned by linux_kthread_target.  */
 static struct target_ops *linux_kthread_ops;
@@ -436,28 +406,28 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
     {
       size = F_OFFSET (task_struct, comm) + F_SIZE (task_struct, comm);
 
-      task_name = lkd_private.string_buf + F_OFFSET (task_struct, comm);
+      task_name = scratch_buf + F_OFFSET (task_struct, comm);
 
       /* use scratch area for messing around with strings
        * to avoid static arrays and dispersed mallocs and frees
        **/
-      gdb_assert (lkd_private.string_buf);
-      gdb_assert (lkd_private.string_buf_size >= size);
+      gdb_assert (scratch_buf);
+      gdb_assert (scratch_buf_size >= size);
 
       /* the task struct is not likely to change much from one kernel version
        * to another. Knowing that comm is one of the far fields,
        * try read the task struct in one command */
-      read_memory (task_struct, lkd_private.string_buf, size);
+      read_memory (task_struct, scratch_buf, size);
 
       l_ps->task_struct = task_struct;
-      tid = extract_unsigned_field (lkd_private.string_buf, task_struct, pid);
-      l_ps->mm = extract_pointer_field (lkd_private.string_buf,
+      tid = extract_unsigned_field (scratch_buf, task_struct, pid);
+      l_ps->mm = extract_pointer_field (scratch_buf,
 					task_struct, mm);
-      l_ps->active_mm = extract_pointer_field (lkd_private.string_buf,
+      l_ps->active_mm = extract_pointer_field (scratch_buf,
 					       task_struct, active_mm);
-      l_ps->tgid = extract_unsigned_field (lkd_private.string_buf,
+      l_ps->tgid = extract_unsigned_field (scratch_buf,
 					 task_struct, tgid);
-      l_ps->prio = extract_unsigned_field (lkd_private.string_buf,
+      l_ps->prio = extract_unsigned_field (scratch_buf,
 					   task_struct, prio);
       l_ps->core = core;	/* for to_core_of_threads */
 
@@ -1060,12 +1030,12 @@ lkd_proc_get_list (void)
     return process_list;
     }
 
-  gdb_assert (lkd_private.proc_list_invalid);
+  gdb_assert (kthread_list_invalid);
 
   DEBUG(TASK, 1, "Getting the list helper!\n");
   get_list_helper (&process_list);
 
-  lkd_private.proc_list_invalid = FALSE;
+  kthread_list_invalid = FALSE;
 
   DEBUG (INIT, 1, "()-\n");
 
@@ -1084,7 +1054,7 @@ process_t *lkd_proc_get_by_ptid (ptid_t ptid)
   process_t *ps;
 
   /* check list is valid */
-  gdb_assert(!lkd_private.proc_list_invalid);
+  gdb_assert(!kthread_list_invalid);
 
   /* We must ensure that we don't try to return
    *  threads created by another layer ... such as the remote layer
@@ -1144,7 +1114,7 @@ lkd_proc_invalidate_list (void)
   * be deleted or not. */
   iterate_over_threads (thread_clear_info, NULL);
 
-  lkd_private.proc_list_invalid = TRUE;
+  kthread_list_invalid = TRUE;
 
   DEBUG (INIT, 1, "()-\n");
 }
@@ -1196,16 +1166,11 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* Verify that this represents an appropriate linux target */
 
-  DEBUG (INIT, 1, "()+\n");
+  /* Allocate private scratch buffer */
+  scratch_buf_size = 4096;
+  scratch_buf = (unsigned char *) xcalloc (scratch_buf_size, sizeof (char));
 
-  /* Initialise any data before we push */
-  memset (&lkd_private, 0, sizeof(lkd_private));
-
-  lkd_private.string_buf_size = 4096;
-  lkd_private.string_buf =
-    (unsigned char *) xcalloc (lkd_private.string_buf_size, sizeof (char));
-
-  lkd_private.proc_list_invalid = TRUE;
+  kthread_list_invalid = TRUE;
 
   lkd_proc_init ();
 
