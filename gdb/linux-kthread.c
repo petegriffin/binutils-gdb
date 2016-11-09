@@ -1174,19 +1174,11 @@ linux_kthread_activate (struct objfile *objfile)
 
   lkd_proc_init ();
 
-  DEBUG (INIT, 1, "()+\n");
-
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
   /* TODO: Need arch specific callback (to check MMU / VM support etc) */
 
-  printf_filtered ("%s:%d\n",__func__, __LINE__);
-
   lkd_proc_invalidate_list ();
-
-  DEBUG (INIT, 1, "()+\n");
-
-  /* scan the linux threads */
 
   /* to get correct thread names from add_thread_with_info()
      target_ops must be pushed before enumerating kthreads */
@@ -1194,6 +1186,7 @@ linux_kthread_activate (struct objfile *objfile)
   push_target (linux_kthread_ops);
   linux_kthread_active = 1;
 
+  /* scan the linux threads */
   if (!lkd_proc_refresh_info (stop_core))
     {
       /* don't activate linux-kthread as no threads were found */
