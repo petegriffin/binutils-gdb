@@ -47,15 +47,15 @@
 void lkd_proc_invalidate_list (void);
 int lkd_proc_refresh_info (int core);
 
-static process_t *lkd_proc_get_list (void);
-static process_t *lkd_proc_get_by_ptid (ptid_t ptid);
-static process_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
-static process_t *lkd_proc_get_running (int core);
+static linux_kthread_info_t *lkd_proc_get_list (void);
+static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
+static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
+static linux_kthread_info_t *lkd_proc_get_running (int core);
 static CORE_ADDR lkd_proc_get_runqueues (int reset);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
 static void lkd_proc_init (void);
 static void lkd_proc_free_list(void);
-static int lkd_proc_is_curr_task (process_t * ps);
+static int lkd_proc_is_curr_task (linux_kthread_info_t * ps);
 
 static int kthread_list_invalid;
 static unsigned char *scratch_buf;
@@ -306,9 +306,9 @@ int max_cores = MAX_CORES;
 
 
 /* The current task. */
-process_t *process_list = NULL;	/*the processes list from the linux prospective */
-process_t *wait_process = NULL;	/*process we stopped at in target_wait */
-process_t *running_process[MAX_CORES];	/*scheduled process as seen by each core */
+linux_kthread_info_t *process_list = NULL;	/*the processes list from the linux prospective */
+linux_kthread_info_t *wait_process = NULL;	/*process we stopped at in target_wait */
+linux_kthread_info_t *running_process[MAX_CORES];	/*scheduled process as seen by each core */
 
 uint32_t per_cpu_offset[MAX_CORES]; /*__per_cpu_offset*/
 
@@ -361,13 +361,13 @@ proc_private_dtor (struct private_thread_info * dummy)
 	/* nop, do not free. */
 }
 
-/* Create the 'process_t' for the task pointed by the passed
+/* Create the 'linux_kthread_info_t' for the task pointed by the passed
  TASK_STRUCT. */
 static void
-get_task_info (CORE_ADDR task_struct, process_t ** ps,
+get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 	       int core /*zero-based */ )
 {
-  process_t *l_ps;
+  linux_kthread_info_t *l_ps;
   size_t size;
   unsigned char *task_name;
   int i = 0;
@@ -378,7 +378,7 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
       ps = &((*ps)->next);
 
   if (*ps == NULL)
-    *ps = XCNEW (process_t);
+    *ps = XCNEW (linux_kthread_info_t);
 
   l_ps = *ps;
 
@@ -547,7 +547,7 @@ CORE_ADDR
 lkd_proc_get_runqueues (int reset)
 {
       CORE_ADDR swapper = 0;
-      process_t *test_ps;
+      linux_kthread_info_t *test_ps;
 
       DEBUG(TASK, 1, "()+\n");
 
@@ -587,12 +587,12 @@ lkd_proc_get_runqueues (int reset)
   return runqueues_addr;
 }
 
-/* Returns the 'process_t' corresponding to the passed task_struct or
+/* Returns the 'linux_kthread_info_t' corresponding to the passed task_struct or
  NULL if not in the list. */
-process_t *
+linux_kthread_info_t *
 lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
 {
-  process_t *ps = lkd_proc_get_list ();
+  linux_kthread_info_t *ps = lkd_proc_get_list ();
 
   DEBUG(TASK, 1, "()+\n");
 
@@ -608,10 +608,10 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
 }
 
 /* Return the process currently scheduled on one core */
-process_t *
+linux_kthread_info_t *
 lkd_proc_get_running (int core)
 {
-  process_t *current = NULL;
+  linux_kthread_info_t *current = NULL;
   CORE_ADDR task;
   struct thread_info *tp;	/*gdb ti */
   ptid_t old_ptid;
@@ -677,7 +677,7 @@ lkd_proc_get_running (int core)
 
 /* Return 1 if this is a current task (or 0)*/
 int
-lkd_proc_is_curr_task (process_t * ps)
+lkd_proc_is_curr_task (linux_kthread_info_t * ps)
 {
   return (ps && (ps == lkd_proc_get_running (ps->core)));
 }
@@ -818,10 +818,10 @@ lkd_proc_refresh_info (int cur_core)
 {
   int i = max_cores;
   int new_last_pid;
-  process_t *ps;
+  linux_kthread_info_t *ps;
   int do_invalidate = 0;
 
-  memset (running_process, 0, max_cores * sizeof (process_t *));
+  memset (running_process, 0, max_cores * sizeof (linux_kthread_info_t *));
   memset (current_thread_info, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (current_task_struct, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (rq_curr, 0, max_cores * sizeof (CORE_ADDR));
@@ -898,7 +898,7 @@ lkd_proc_refresh_info (int cur_core)
   DEBUG (TASK, 1, "wait_process 0x%p gdb_thread 0x%p priv 0x%p\n",wait_process,
 	 wait_process->gdb_thread, wait_process->gdb_thread->priv);
   
-  gdb_assert((process_t *) wait_process->gdb_thread->priv == wait_process);
+  gdb_assert((linux_kthread_info_t *) wait_process->gdb_thread->priv == wait_process);
 
 
   /* Notify ptid changed. */
@@ -949,8 +949,8 @@ _next_thread (CORE_ADDR p)
 }
 
 
-static process_t **
-get_list_helper (process_t ** ps)
+static linux_kthread_info_t **
+get_list_helper (linux_kthread_info_t ** ps)
 {
   CORE_ADDR g, t, init_task_addr;
   int core;
@@ -1013,9 +1013,9 @@ get_list_helper (process_t ** ps)
 
 /*----------------------------------------------------------------------------------------------*/
 
-/* This function returns a the list of 'process_t' corresponding
+/* This function returns a the list of 'linux_kthread_info_t' corresponding
  to the tasks in the kernel's task list. */
-static process_t *
+static linux_kthread_info_t *
 lkd_proc_get_list (void)
 {
   /* Return the cached copy if there's one,
@@ -1042,16 +1042,16 @@ lkd_proc_get_list (void)
   return process_list;
 }
 
-/* Returns a valid 'process_t' corresponding to
+/* Returns a valid 'linux_kthread_info_t' corresponding to
  * the passed ptid or NULL if not found. NULL means
  * the thread needs to be pruned.
  */
-process_t *lkd_proc_get_by_ptid (ptid_t ptid)
+linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 {
   struct thread_info *tp;
   long tid = ptid_get_tid(ptid);
   long lwp = ptid_get_lwp(ptid);
-  process_t *ps;
+  linux_kthread_info_t *ps;
 
   /* check list is valid */
   gdb_assert(!kthread_list_invalid);
@@ -1070,7 +1070,7 @@ process_t *lkd_proc_get_by_ptid (ptid_t ptid)
 
   DEBUG (TASK, 1, "ptid %s tp=0x%x\n", ptid_to_str(ptid), tp);
 
-  ps = (process_t *)tp->priv;
+  ps = (linux_kthread_info_t *)tp->priv;
 
   /* Prune the gdb-thread if the process is not valid
    * meaning is was no longer found in the task list. */
@@ -1097,8 +1097,8 @@ thread_print_info (struct thread_info *tp, void *ignored)
 void
 lkd_proc_invalidate_list (void)
 {
-  process_t *ps = process_list;
-  process_t *cur;
+  linux_kthread_info_t *ps = process_list;
+  linux_kthread_info_t *cur;
 
   DEBUG (INIT, 1, "()+\n");
 
@@ -1122,8 +1122,8 @@ lkd_proc_invalidate_list (void)
 void
 lkd_proc_free_list (void)
 {
-  process_t *ps = process_list;
-  process_t *cur;
+  linux_kthread_info_t *ps = process_list;
+  linux_kthread_info_t *cur;
   while (ps)
     {
       cur = ps;
@@ -1265,7 +1265,7 @@ linux_kthread_fetch_registers (struct target_ops *ops,
   CORE_ADDR addr = ptid_get_tid (inferior_ptid);
   struct target_ops *beneath = find_target_beneath (ops);
 
-  process_t *ps;
+  linux_kthread_info_t *ps;
 
   DEBUG (TASK, 1, "()+ regnum(%d)\n", regnum);
 
@@ -1375,7 +1375,7 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   struct target_ops *beneath = find_target_beneath (ops);
-  process_t *ps;
+  linux_kthread_info_t *ps;
 
   DEBUG (TASK, 1, "ptid= %s ", ptid_to_str(ptid));
 
@@ -1416,7 +1416,7 @@ linux_kthread_extra_thread_info (struct target_ops *self,
 				 struct thread_info *info)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
-  process_t *ps = (process_t *) info->priv;
+  linux_kthread_info_t *ps = (linux_kthread_info_t *) info->priv;
 
   if (ps /* && check_ps_magic */)
     {
@@ -1440,7 +1440,7 @@ linux_kthread_extra_thread_info (struct target_ops *self,
 static char *
 linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
 {
-  process_t *ps;
+  linux_kthread_info_t *ps;
   struct thread_info *tp;
 
   DEBUG (TARGET, 1, "ptid %s\n", ptid_to_str(ptid));
@@ -1455,8 +1455,8 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
     return "";
   }
 
-  /* we use the gdb thread private field for storing the process_t */
-  ps = (process_t *) tp->priv;
+  /* we use the gdb thread private field for storing the linux_kthread_info_t */
+  ps = (linux_kthread_info_t *) tp->priv;
 
   gdb_assert (ps->comm);
   return ps->comm;

@@ -42,17 +42,18 @@ struct field_info
 };
 
 
-/* The list of tasks as cached in the debugger. */
-typedef struct process_t_
+/* The list of Linux threads cached by linux-kthread */
+typedef struct private_thread_info
 {
-  struct process_t_ *next;
+  struct private_thread_info *next;
   CORE_ADDR task_struct;
   CORE_ADDR mm;
   CORE_ADDR active_mm;
 
   ptid_t old_ptid;
 
-  int core;			/*this is the "dynamic" core info */
+  /*this is the "dynamic" core info */
+  int core;
 
   int tgid;
   unsigned int prio;
@@ -60,7 +61,7 @@ typedef struct process_t_
   int valid;
 
   struct thread_info *gdb_thread;
-} process_t;
+} linux_kthread_info_t;
 
 #define PTID_OF(ps) ((ps)->gdb_thread->ptid)
 
