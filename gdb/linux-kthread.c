@@ -17,6 +17,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This module allows GDB to correctly enumerate Linux kernel threads
+   whilst debugging a Linux kernel. */
+
 #include "defs.h"
 #include "gdbcore.h"
 #include "gdbthread.h"
@@ -458,6 +461,7 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
 					   task_struct, prio);
       l_ps->core = core;	/* for to_core_of_threads */
 
+      /* add square brackets to name for kernel threads */
       if (!l_ps->mm)
 	{
 	  int len = strlen ((char *)task_name);
@@ -488,10 +492,11 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
     }
   else
     {
-      /* PAG: swap lwp and tid, lwp is now cpu core for everything, tid is linux
+      /* lwp is now cpu core for everything, tid is linux
 	 pid this matches gdbremote usage */
 
       this_ptid = ptid_build (ptid_get_pid(inferior_ptid), CORE_INVAL, tid);
+
       l_ps->gdb_thread = iterate_over_threads (find_thread_tid, &tid);
 
       /*reset the thread core value, if existing */
@@ -530,17 +535,12 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
    * already have been created without, like hw threads.
    * and this also tell is the gdb_thread is pruned or not!*/
 
-  DEBUG (TASK, 1, "***** Before update l_ps %p gdb_thread %p\n", l_ps, l_ps->gdb_thread);
   l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
 
-  //  DEBUG (TASK, 1, "gdb_thread->lwp %ld <=> ps %p\n",
-  //		  ptid_get_lwp(PTID_OF (*ps)), ps);
-
-  DEBUG (TASK, 1, "ps: comm = %s\n",l_ps->comm);
-  DEBUG (TASK, 1, "ps: lwp = %ld\n", ptid_get_lwp(PTID_OF (l_ps)));
-  DEBUG (TASK, 1, "ps: pid = %d\n", ptid_get_pid(PTID_OF (l_ps)));
-  DEBUG (TASK, 1, "ps: tid = %ld\n", ptid_get_tid(PTID_OF (l_ps)));
+#if 0
+  DEBUG (TASK, 1, "ps: comm = %s ptid=%s\n",l_ps->comm, ptid_to_str(PTID_OF (l_ps)));
   DEBUG (TASK, 1, "***** Updating l_ps %p gdb_thread %p\n\n", l_ps, l_ps->gdb_thread);
+#endif
 
   /* the process list freeing is not handled thanks to
    * this `private` facility, yet.
@@ -692,20 +692,14 @@ lkd_proc_get_running (int core)
 	  current->core = core;	/* was CORE_INVAL */
 	  running_process[core] = current;
 
-	  DEBUG(TASK, 1, "running_process[%d] = 0x%p process_t gdb_thread %p gdb_thread->priv = 0x%p\n",core, current, current->gdb_thread, current->gdb_thread->priv);
-
 	}			// task
     }				// running_process[core]
 
 
-  DEBUG (TASK, 1, "running ps[%d]: comm = %s\n", core,running_process[core]->comm);
-  DEBUG (TASK, 1, "running ps: lwp = %ld\n", ptid_get_lwp(PTID_OF (running_process[core])));
-  DEBUG (TASK, 1, "running ps: pid = %d\n", ptid_get_pid(PTID_OF (running_process[core])));
-  DEBUG (TASK, 1, "running ps: tid = %ld\n", ptid_get_tid(PTID_OF (running_process[core])));
+  DEBUG (TASK, 1, "running ps[%d]: comm = %s ptid=%s\n", core,
+	 running_process[core]->comm,
+	 ptid_to_str(PTID_OF (running_process[core])));
 
-  DEBUG(TASK, 1, "running_ps[%d] = 0x%p gdb_thread %p\n",core, running_process[core], running_process[core]->gdb_thread);
-  //  DEBUG(TASK, 1, "running_process[%d] = 0x%p process_t gdb_thread %p gdb_thread->priv = 0x%p\n",core, current, current->gdb_thread, current->gdb_thread->priv);
-  //DEBUG(TASK, 1, "running_process[%d] = com %s\n",core, running_process[core]->comm);
   DEBUG(TASK, 1, "()-\n");
 
   return running_process[core];
@@ -905,10 +899,6 @@ lkd_proc_refresh_info (int cur_core)
   /* Call update_thread_list() to prune GDB threads which are no longer linked
    * to a Linux task no longer linked to a linux task. */
 
-  /* TODO: This API call can end up deleting all the kthreads when connected
-   * to QEMU gdbremote. But without it we don't correctly prune threads
-   * when connected to OpenOCD. Needs further debugging.
-  */
   if (linux_kthread_active)
     update_thread_list();
 
@@ -936,7 +926,9 @@ lkd_proc_refresh_info (int cur_core)
 
   gdb_assert(wait_process->gdb_thread);
 
-  DEBUG (TASK, 1, "wait_process 0x%p gdb_thread 0x%p priv 0x%p\n",wait_process, wait_process->gdb_thread, wait_process->gdb_thread->priv);
+  DEBUG (TASK, 1, "wait_process 0x%p gdb_thread 0x%p priv 0x%p\n",wait_process,
+	 wait_process->gdb_thread, wait_process->gdb_thread->priv);
+  
   gdb_assert((process_t *) wait_process->gdb_thread->priv == wait_process);
 
 
@@ -1425,8 +1417,8 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
 
   DEBUG (TASK, 1, "ptid= %s ", ptid_to_str(ptid));
 
-  //  DEBUG (INIT, 1, "()-\n");
   //return beneath->to_thread_alive (beneath, ptid);
+
   ps = lkd_proc_get_by_ptid (ptid);
 
   if (!ps)
