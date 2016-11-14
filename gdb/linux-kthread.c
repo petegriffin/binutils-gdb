@@ -547,19 +547,19 @@ lkd_proc_get_runqueues (int reset)
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_runqueues\n");
 
-      runqueues_addr = 0;
+  runqueues_addr = 0;
 
-      if (HAS_ADDR (runqueues))
-	{
-	  runqueues_addr = ADDR (runqueues);
-	}
-      else
-	{
-	  runqueues_addr = ADDR (per_cpu__runqueues);
-	}
-      /* check validity */
+  if (HAS_ADDR (runqueues))
+    {
+      runqueues_addr = ADDR (runqueues);
+    }
+  else
+    {
+      runqueues_addr = ADDR (per_cpu__runqueues);
+    }
+  /* check validity */
 
-  if (DEBUG_DOMAIN (TASK))
+  if (debug_linuxkthread_threads)
     {
       if (HAS_FIELD (raw_spinlock, magic))
 	{
@@ -577,8 +577,6 @@ lkd_proc_get_runqueues (int reset)
       else
 	printf_filtered ("runqueues access validated OK.\n");
     }
-
-  DEBUG(TASK, 1, "()-\n");
 
   return runqueues_addr;
 }
