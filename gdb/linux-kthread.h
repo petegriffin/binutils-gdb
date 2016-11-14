@@ -187,13 +187,6 @@ linux_get_field_size (struct field_info *field)
  * swap usage if testing with an STMC in the short term.
  */
 
-
-#define lkd_ptid_to_core(ptid) ptid_get_lwp(ptid)
-#define lkd_ptid_to_pid(ptid) ptid_get_tid(ptid)
-
-#define LKD_PTID_SET_CORE(ptid, core) do { ptid.lwp = core; } while (0)
-#define LKD_PTID_SET_PID(ptid, pid) do { ptid.tid = pid; } while (0)
-
 /* Set the function that supplies registers for an inactive thread for
    architecture GDBARCH to SUPPLY_KTHREAD.  */
 

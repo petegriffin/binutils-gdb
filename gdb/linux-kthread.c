@@ -1380,7 +1380,7 @@ linux_kthread_extra_thread_info (struct target_ops *self,
       size_t len = 0;
 
       len = snprintf (msg, PRINT_CELL_SIZE, "pid: %li tgid: %i",
-		      lkd_ptid_to_pid (PTID_OF (ps)), ps->tgid);
+		      ptid_get_tid(PTID_OF (ps)), ps->tgid);
 
       /* yao: don't do anything special this could come from xml threads.dtd */
 
