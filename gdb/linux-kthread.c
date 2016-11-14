@@ -1039,13 +1039,16 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
    *  threads created by another layer ... such as the remote layer
    */
 
-  if (tid) {
+  if (tid)
+    {
 	  /* non-swapper, tis is Linux pid */
 	  tp = iterate_over_threads (find_thread_tid, (void *) &tid);
-  } else {
+    }
+  else
+    {
 	  /*swapper, LWP gives the core, tid = 0 is not unique */
 	  tp = iterate_over_threads (find_thread_swapper, (void *) &lwp);
-  }
+    }
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p\n",
