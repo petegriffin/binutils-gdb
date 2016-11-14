@@ -31,19 +31,18 @@
 
 #include "gdb_obstack.h"
 
-//#define DEBUG_LINUX_KTHREAD
-#ifdef DEBUG_LINUX_KTHREAD
-#define ENTER() do { printf_unfiltered("Enter %s:%d\n", __FUNCTION__, __LINE__); } while (0)
-#define DEBUG(d,l,fmt, args...) do { printf_unfiltered("%s:%d: " fmt, __FUNCTION__, __LINE__, ##args); } while (0)
-#define DEBUG_DOMAIN(domain) (2)
-#else
-#define ENTER() do { } while (0)
-#define DEBUG(d,l, fmt, args...) do { } while (0)
-#define DEBUG_DOMAIN(domain) (0)
-#endif
-
 #include "linux-kthread.h"
 
+/* Whether to emit debugging output related to targetops. */
+static int debug_linuxkthread_targetops=0;
+
+/* Whether to emit debugging output related to threads. */
+static int debug_linuxkthread_threads=0;
+
+/* Whether to emit debugging output related to symbol lookup */
+static int debug_linuxkthread_symbols=0;
+
+/* Forward declarations */
 void lkd_proc_invalidate_list (void);
 int lkd_proc_refresh_info (int core);
 
@@ -151,7 +150,10 @@ linux_init_addr (struct addr_info *addr, int check)
 
   if (!addr->bmsym.minsym)
     {
-      DEBUG (INIT, 3, "Checking for address of '%s' : NOT FOUND\n", addr->name);
+      if (debug_linuxkthread_symbols)
+	fprintf_unfiltered (gdb_stdlog, "Checking for address of '%s' :"
+			    "NOT FOUND\n", addr->name);
+
       if (!check)
 	error ("Couldn't find address of %s", addr->name);
       return 0;
@@ -161,8 +163,9 @@ linux_init_addr (struct addr_info *addr, int check)
   addr->next = addr_info;
   addr_info = addr;
 
-  DEBUG (INIT, 1, "%s address is %s\n", addr->name,
-	 phex (BMSYMBOL_VALUE_ADDRESS (addr->bmsym), 4));
+  if (debug_linuxkthread_symbols)
+    fprintf_unfiltered (gdb_stdlog, "%s address is %s\n", addr->name,
+			phex (BMSYMBOL_VALUE_ADDRESS (addr->bmsym), 4));
 
   return 1;
 }
@@ -199,7 +202,9 @@ linux_init_field (struct field_info *field, int check)
     lookup_symbol (field->struct_name, NULL, STRUCT_DOMAIN, NULL).symbol;
   if (field->type)
     {
-      DEBUG (INIT, 1, "Checking for 'struct %s' : OK\n", field->struct_name);
+      if (debug_linuxkthread_symbols)
+	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : OK\n",
+			    field->struct_name);
     }
   else
     {
@@ -212,9 +217,11 @@ linux_init_field (struct field_info *field, int check)
 	field->type = NULL;
 
       if (field->type != NULL)
-	DEBUG (INIT, 1, "Checking for 'struct %s' : TYPEDEF\n", field->struct_name);
+	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : TYPEDEF\n",
+			    field->struct_name);
       else
-	DEBUG (INIT, 1, "Checking for 'struct %s' : NOT FOUND\n", field->struct_name);
+	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : NOT FOUND\n",
+			    field->struct_name);
     }
 
   if (field->type == NULL
@@ -233,8 +240,10 @@ linux_init_field (struct field_info *field, int check)
   field->next = field_info;
   field_info = field;
 
-  DEBUG (INIT, 2, "%s::%s => offset %i  size %i\n", field->struct_name,
-	 field->field_name, field->offset, field->size);
+  if (debug_linuxkthread_symbols)
+    fprintf_unfiltered (gdb_stdlog, "%s::%s => offset %i  size %i\n"
+			, field->struct_name, field->field_name,
+			field->offset, field->size);
   return 1;
 }
 
@@ -346,8 +355,10 @@ find_thread_swapper (struct thread_info *tp, void *arg)
 
   if ((!ptid_get_tid(tp->ptid)) && (ptid_get_lwp(tp->ptid) == core))
     {
-      DEBUG (TASK, 2, "swapper found: tp=0x%x tp->ptid %s core=%ld\n",
-	     tp, ptid_to_str(tp->ptid), core);
+      if (debug_linuxkthread_threads)
+	fprintf_unfiltered (gdb_stdlog,
+			    "swapper found: tp=%p tp->ptid %s core=%ld\n",
+			    tp, ptid_to_str(tp->ptid), core);
 
       return 1;
     }
@@ -385,7 +396,9 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
   if (task_struct == 0)
     {
 
-      DEBUG (TASK, 1, "\n\n **** Creating swapper for core %d ps=0x%p\n",core, l_ps);
+      if (debug_linuxkthread_threads)
+	fprintf_unfiltered (gdb_stdlog, "Creating swapper for core %d ps=%p\n",
+			    core, l_ps);
       /* create a fake swapper entry now for the additional core
        * to keep the gdb_thread ordering
        **/
@@ -483,18 +496,8 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
    */
   if (!l_ps->gdb_thread)
    {
-     if (DEBUG_DOMAIN (TASK))
-       {
-	/*sanity check : go through the list and check if lwp already there */
-      process_t *tps = process_list;
-
-      while (tps && (tps)->valid)
-	{
-	  if (tid && (tps)->gdb_thread && (ptid_get_tid(PTID_OF (tps)) == tid))
-	    gdb_assert (0);
-	  tps = tps->next;
-	};
-       }
+     if (debug_linuxkthread_threads)
+       fprintf_unfiltered (gdb_stdlog, "allocate a new thread");
 
       /* add with info so that pid_to_string works. */
       l_ps->gdb_thread =  add_thread_with_info (this_ptid,
@@ -507,10 +510,9 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 
   l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
 
-#if 0
-  DEBUG (TASK, 1, "ps: comm = %s ptid=%s\n",l_ps->comm, ptid_to_str(PTID_OF (l_ps)));
-  DEBUG (TASK, 1, "***** Updating l_ps %p gdb_thread %p\n\n", l_ps, l_ps->gdb_thread);
-#endif
+  if (debug_linuxkthread_threads)
+      fprintf_unfiltered (gdb_stdlog, "ps: comm = %s ptid=%s\n"
+			  ,l_ps->comm, ptid_to_str(PTID_OF (l_ps)));
 
   /* the process list freeing is not handled thanks to
    * this `private` facility, yet.
@@ -526,7 +528,8 @@ CORE_ADDR
 lkd_proc_get_rq_curr (int core)
 {
 
-  DEBUG(TASK, 1, "()+\n");
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr\n");
 
   if (!rq_curr[core])
     {
@@ -539,7 +542,6 @@ lkd_proc_get_rq_curr (int core)
 						    LKD_BYTE_ORDER);
     }
 
-  DEBUG(TASK, 1, "()-\n");
   return rq_curr[core];
 };
 
@@ -549,7 +551,8 @@ lkd_proc_get_runqueues (int reset)
       CORE_ADDR swapper = 0;
       linux_kthread_info_t *test_ps;
 
-      DEBUG(TASK, 1, "()+\n");
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_runqueues\n");
 
       runqueues_addr = 0;
 
@@ -594,8 +597,6 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
 {
   linux_kthread_info_t *ps = lkd_proc_get_list ();
 
-  DEBUG(TASK, 1, "()+\n");
-
   while ((ps != NULL) && (ps->valid == 1))
     {
       if (ps->task_struct == task_struct)
@@ -603,7 +604,6 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
       ps = ps->next;
     }
 
-  DEBUG(TASK, 1, "()-\n");
   return NULL;
 }
 
@@ -616,15 +616,14 @@ lkd_proc_get_running (int core)
   struct thread_info *tp;	/*gdb ti */
   ptid_t old_ptid;
 
-  DEBUG(TASK, 1, " core=%d ()+\n",core);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_running core=%d\n",core);
 
   if (core == CORE_INVAL)
     return NULL;
 
   if (running_process[core] == NULL)
     {
-
-      DEBUG(TASK, 1, "");
 
       gdb_assert (lkd_proc_get_runqueues (0));
 
@@ -641,8 +640,6 @@ lkd_proc_get_running (int core)
 	       * the swapper of an secondary SMP core.
 	       */
 
-	      DEBUG(TASK, 1, "!current core=%d\n",core);
-	      
 	      current =
 		lkd_proc_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid), core + 1, 0));
 
@@ -652,10 +649,9 @@ lkd_proc_get_running (int core)
 	    }
 	  else
 	    {
-	      /* update the thread's lwp in thread_list if it exists and wasn't scheduled
-	       * so that tid makes sense for both the gdbserver and infrun.c
-	       **/
-	      DEBUG(TASK, 1, "");
+	      /* update the thread's lwp in thread_list if it exists and wasn't
+	       * scheduled so that tid makes sense for both the gdbserver and
+	       * infrun.c */
 	      PTID_OF (current).lwp = core + 1;
 	    }
 
@@ -665,12 +661,10 @@ lkd_proc_get_running (int core)
 	}			// task
     }				// running_process[core]
 
-
-  DEBUG (TASK, 1, "running ps[%d]: comm = %s ptid=%s\n", core,
-	 running_process[core]->comm,
-	 ptid_to_str(PTID_OF (running_process[core])));
-
-  DEBUG(TASK, 1, "()-\n");
+    if (debug_linuxkthread_threads)
+      fprintf_unfiltered (gdb_stdlog, "running ps[%d]: comm = %s ptid=%s\n",
+			  core, running_process[core]->comm,
+			  ptid_to_str(PTID_OF (running_process[core])));
 
   return running_process[core];
 }
@@ -688,8 +682,6 @@ get_rq_idle (int core)
 {
   CORE_ADDR curr_addr = lkd_proc_get_runqueues (0);
 
-  DEBUG(TASK, 1, "()+\n");
-
   if (!curr_addr || !HAS_FIELD (rq, idle))
     return 0;
 
@@ -701,7 +693,6 @@ get_rq_idle (int core)
 						    LKD_BYTE_ORDER);
     }
 
-  DEBUG(TASK, 1, "()-\n");
   return rq_idle[core];
 };
 
@@ -735,8 +726,9 @@ get_process_count (int core)
   proc_cnt = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
 					   LKD_BYTE_ORDER);
 
-  DEBUG(TASK, 1, "core(%d) curr_addr=0x%lx proc_cnt=%d\n\n", core, curr_addr,
-	proc_cnt);
+    if (debug_linuxkthread_threads)
+      fprintf_unfiltered (gdb_stdlog, "core(%d) curr_addr=0x%lx proc_cnt=%d\n",
+			  core, curr_addr, proc_cnt);
 
   return proc_cnt;
 };
@@ -798,10 +790,13 @@ lkd_proc_init (void)
     }
   else
     {
-      DEBUG (INIT, 1, "Assuming non-SMP kernel.\n");
+        if (debug_linuxkthread_threads)
+	  fprintf_unfiltered (gdb_stdlog, "Assuming non-SMP kernel.\n");
     }
 
-  DEBUG (INIT, 1, "SMP kernel. %d cores detected\n",max_cores);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "SMP kernel. %d cores detected\n",
+			max_cores);
 
   if (!lkd_proc_get_runqueues (1 /*reset */ ) && (max_cores > 1))
     printf_filtered ("\nCould not find the address of cpu runqueues:"
@@ -825,9 +820,6 @@ lkd_proc_refresh_info (int cur_core)
   memset (current_thread_info, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (current_task_struct, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (rq_curr, 0, max_cores * sizeof (CORE_ADDR));
-
-  DEBUG (TASK, 1, "WAS: last_pid=%d, pcount[0]=%d, pcount[1]=%d\n",
-	 last_pid, kthread_process_counts[0], kthread_process_counts[1]);
 
   new_last_pid = get_last_pid ();
   if (new_last_pid != last_pid)
@@ -855,9 +847,6 @@ lkd_proc_refresh_info (int cur_core)
 	  do_invalidate = 1;
 	}
     }
-
-  DEBUG (TASK, 1, "NEW: last_pid=%d, pcount[0]=%d, pcount[1]=%d do_invalidate=%d\n",
-	 last_pid, kthread_process_counts[0], kthread_process_counts[1], do_invalidate);
 
   if (do_invalidate)
       lkd_proc_invalidate_list ();
@@ -890,14 +879,13 @@ lkd_proc_refresh_info (int cur_core)
   if (!wait_process)
     return 0;
 
-  DEBUG (TASK, 1, "wait_process comm=%s ptid= %s\n", wait_process->comm,
-	 ptid_to_str(PTID_OF (wait_process)));
-
   gdb_assert(wait_process->gdb_thread);
 
-  DEBUG (TASK, 1, "wait_process 0x%p gdb_thread 0x%p priv 0x%p\n",wait_process,
-	 wait_process->gdb_thread, wait_process->gdb_thread->priv);
-  
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "wait_process comm=%s ptid= %s\n",
+			wait_process->comm,
+			ptid_to_str(PTID_OF (wait_process)));
+
   gdb_assert((linux_kthread_info_t *) wait_process->gdb_thread->priv == wait_process);
 
 
@@ -937,11 +925,13 @@ _next_task (CORE_ADDR p)
 static CORE_ADDR
 _next_thread (CORE_ADDR p)
 {
-  CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct, thread_group, list_head, next);
+  CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct,
+						      thread_group,
+						      list_head, next);
 
   if (!cur_entry)
     {
-      DEBUG (TASK, 3, "kernel thread group list contains NULL pointer\n");
+      warning ("kernel thread group list contains NULL pointer\n");
       return 0;
     }
 
@@ -989,8 +979,9 @@ get_list_helper (linux_kthread_info_t ** ps)
                 }
             }
 
-           DEBUG (TASK, 2, "Got task info for %s (%li)\n",
-              (*ps)->comm, ptid_get_lwp (PTID_OF (*ps)));
+	    if (debug_linuxkthread_threads)
+	      fprintf_unfiltered (gdb_stdlog, "Got task info for %s (%li)\n",
+				  (*ps)->comm, ptid_get_lwp (PTID_OF (*ps)));
 
           ps = &((*ps)->next);
 
@@ -1010,8 +1001,7 @@ get_list_helper (linux_kthread_info_t ** ps)
   return ps;
 }
 
-
-/*----------------------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
 /* This function returns a the list of 'linux_kthread_info_t' corresponding
  to the tasks in the kernel's task list. */
@@ -1020,24 +1010,19 @@ lkd_proc_get_list (void)
 {
   /* Return the cached copy if there's one,
    * or rebuild it.
-   **/
+   */
 
-  DEBUG (INIT, 1, "()+\n");
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_list\n");
 
   if (process_list && process_list->valid)
-    {
-      DEBUG(TASK, 1, "Checking the list is valid (%p)\n", process_list);
     return process_list;
-    }
 
   gdb_assert (kthread_list_invalid);
 
-  DEBUG(TASK, 1, "Getting the list helper!\n");
   get_list_helper (&process_list);
 
   kthread_list_invalid = FALSE;
-
-  DEBUG (INIT, 1, "()-\n");
 
   return process_list;
 }
@@ -1068,7 +1053,9 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 	  tp = iterate_over_threads (find_thread_swapper, (void *) &lwp);
   }
 
-  DEBUG (TASK, 1, "ptid %s tp=0x%x\n", ptid_to_str(ptid), tp);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p\n",
+			ptid_to_str(ptid), tp);
 
   ps = (linux_kthread_info_t *)tp->priv;
 
@@ -1089,7 +1076,8 @@ thread_clear_info (struct thread_info *tp, void *ignored)
 static int
 thread_print_info (struct thread_info *tp, void *ignored)
 {
-  DEBUG (INIT, 1, "thread_info = 0x%p ptid = %s\n", tp, ptid_to_str(tp->ptid));
+  fprintf_unfiltered (gdb_stdlog, "thread_info = 0x%p ptid = %s\n",
+		      tp, ptid_to_str(tp->ptid));
   return 0;
 }
 
@@ -1099,8 +1087,6 @@ lkd_proc_invalidate_list (void)
 {
   linux_kthread_info_t *ps = process_list;
   linux_kthread_info_t *cur;
-
-  DEBUG (INIT, 1, "()+\n");
 
   while (ps)
     {
@@ -1115,8 +1101,6 @@ lkd_proc_invalidate_list (void)
   iterate_over_threads (thread_clear_info, NULL);
 
   kthread_list_invalid = TRUE;
-
-  DEBUG (INIT, 1, "()-\n");
 }
 
 void
@@ -1149,11 +1133,12 @@ linux_kthread_activate (struct objfile *objfile)
   struct linux_kthread_ops *ops
     = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
 
-  DEBUG (INIT, 1, "()+\n");
-
-  /*debug print to find pointer to hw threads */
-  DEBUG (INIT, 1, "GDB hw threads on startup \n");
-  iterate_over_threads (thread_print_info, NULL);
+  /*debug print for existing hw threads from layer beneath */
+  if (debug_linuxkthread_threads)
+    {
+      fprintf_unfiltered (gdb_stdlog, "linux_kthread_activate GDB HW threads\n");
+      iterate_over_threads (thread_print_info, NULL);
+    }
 
   /* Skip if the thread stratum has already been activated.  */
   if (linux_kthread_active)
@@ -1192,26 +1177,20 @@ linux_kthread_activate (struct objfile *objfile)
       /* don't activate linux-kthread as no threads were found */
       lkd_proc_invalidate_list ();
 
-      /*PAG thread.c */
       prune_threads();
       return 0;
     }
 
-  DEBUG (INIT, 1, "()+\n");
-
-
-
-  DEBUG (INIT, 1, "()-\n");
   return 1;
 }
 
 /* Cleanup due to deactivation.  */
-
-/*linux_aware_close - lkd-main.c */
 static void
 linux_kthread_close (struct target_ops *self)
 {
-  DEBUG (INIT, 1, "()+\n");
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_close\n");
+
   linux_kthread_active = 0;
 
   wait_process = NULL;
@@ -1220,8 +1199,6 @@ linux_kthread_close (struct target_ops *self)
 
   /* Reset global variables */
   fields_and_addrs_clear ();
-
-  DEBUG (INIT, 1, "()-\n");
 }
 
 /* Deactivate the thread stratum implemented by this module.  */
@@ -1267,12 +1244,8 @@ linux_kthread_fetch_registers (struct target_ops *ops,
 
   linux_kthread_info_t *ps;
 
-  DEBUG (TASK, 1, "()+ regnum(%d)\n", regnum);
-
-  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps)) {
-    DEBUG (TASK, 1, "beneath->to_fetch_registers");
-    return beneath->to_fetch_registers (beneath, regcache, regnum);
-  }
+  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
+      return beneath->to_fetch_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code */
   kthread_ops->supply_kthread(regcache, regnum, ps->task_struct);
@@ -1302,9 +1275,8 @@ linux_kthread_wait (struct target_ops *ops,
   int i;
   struct regcache *regcache;
 
-  DEBUG (INIT, 1, "()+");
-
-  /* linux_aware_wait in lkd-main.c */
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_wait\n");
 
   /* Pass the request to the layer beneath.  */
   stop_ptid = beneath->to_wait (beneath, ptid, status, options);
@@ -1344,8 +1316,6 @@ linux_kthread_wait (struct target_ops *ops,
        stop_ptid = inferior_ptid;
      }
 
-  DEBUG (INIT, 1, "()-");
-
   return stop_ptid;
 }
 
@@ -1356,16 +1326,9 @@ linux_kthread_resume (struct target_ops *ops,
   /* Pass the request to the layer beneath.  */
   struct target_ops *beneath = find_target_beneath (ops);
 
-  DEBUG (TARGET, 1, "Resuming %i with sig %i (step %i)\n",
-	 (int) ptid_get_pid (ptid), (int) sig, step);
-
-  DEBUG (TARGET, 1, "ptid= %s\n", ptid_to_str(ptid));
-
-  /* switch back to hw thread  to avoid gdbremote errors */
-  //  switch_to_thread(PTID_OF (wait_process));
-
-  DEBUG (TARGET, 1, "switch_to_thread(wait_process) ptid= %s\n"
-	 , ptid_to_str(ptid));
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "Resuming %i with sig %i (step %i)\n",
+			(int) ptid_get_pid (ptid), (int) sig, step);
 
   beneath->to_resume (beneath, ptid, step, sig);
 }
@@ -1377,19 +1340,23 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
   struct target_ops *beneath = find_target_beneath (ops);
   linux_kthread_info_t *ps;
 
-  DEBUG (TASK, 1, "ptid= %s ", ptid_to_str(ptid));
-
-  //return beneath->to_thread_alive (beneath, ptid);
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_thread_alive ptid=%s",
+			ptid_to_str(ptid));
 
   ps = lkd_proc_get_by_ptid (ptid);
 
   if (!ps)
     {
-      DEBUG (TASK, 1, "\n ** PRUNE thread ps(%p)\n",ps);
+      if (debug_linuxkthread_threads)
+	fprintf_unfiltered (gdb_stdlog, "Prune thread ps(%p)\n",ps);
+
       return 0;
     }
 
-  DEBUG (TASK, 1, "Alive thread ps(%p)\n",ps);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "Alive thread ps(%p)\n",ps);
+
   return 1;
 }
 
@@ -1398,14 +1365,13 @@ linux_kthread_update_thread_list (struct target_ops *ops)
 {
   struct target_ops *beneath = find_target_beneath (ops);
 
-  DEBUG (INIT, 1, "()+\n");
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_update_thread_list\n");
 
   /* Build linux threads on top */
   lkd_proc_get_list ();
 
   prune_threads ();
-
-  DEBUG (INIT, 1, "()-\n");
 }
 
 /* Return a string describing the state of the thread specified by
@@ -1443,9 +1409,8 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
   linux_kthread_info_t *ps;
   struct thread_info *tp;
 
-  DEBUG (TARGET, 1, "ptid %s\n", ptid_to_str(ptid));
-
-  if (!lkd_ptid_to_core (ptid))	/* when quitting typically */
+  /* when quitting typically */
+  if (!ptid_get_lwp(ptid))
     return "Linux Kernel";
 
   tp = find_thread_ptid (ptid);
@@ -1459,6 +1424,11 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
   ps = (linux_kthread_info_t *) tp->priv;
 
   gdb_assert (ps->comm);
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "kthread_pid_to_str ptid %s str=%s\n",
+			ptid_to_str(ptid), ps->comm);
+
   return ps->comm;
 }
 
@@ -1533,9 +1503,6 @@ static ptid_t target_thread_ptid;
 static void
 linux_awareness_target_thread_changed (ptid_t ptid)
 {
-  /*  DEBUG (D_INIT, 1, "linux_awareness_target_thread_changed {%d, %ld, %ld}\n",
-      ptid_get_pid (ptid), ptid_get_lwp (ptid), ptid_get_tid (ptid));*/
-
   if (ptid_equal (ptid, null_ptid) || ptid_equal (ptid, minus_one_ptid))
     target_thread_ptid = null_ptid;
   else if (ptid_get_tid (ptid) != CORE_INVAL)
@@ -1549,7 +1516,8 @@ extern initialize_file_ftype _initialize_linux_kthread;
 void
 _initialize_linux_kthread (void)
 {
-  DEBUG (INIT, 1, "");
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "_initialize_linux_kthread\n");
 
   complete_target_initialization (linux_kthread_target ());
 
