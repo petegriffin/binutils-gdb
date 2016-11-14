@@ -315,9 +315,12 @@ int max_cores = MAX_CORES;
 
 
 /* The current task. */
-linux_kthread_info_t *process_list = NULL;	/*the processes list from the linux prospective */
-linux_kthread_info_t *wait_process = NULL;	/*process we stopped at in target_wait */
-linux_kthread_info_t *running_process[MAX_CORES];	/*scheduled process as seen by each core */
+/* the processes list from Linux perspective */
+linux_kthread_info_t *process_list = NULL;
+/* the process we stopped at in target_wait */
+linux_kthread_info_t *wait_process = NULL;
+/* scheduled process as seen by each core */
+linux_kthread_info_t *running_process[MAX_CORES];
 
 uint32_t per_cpu_offset[MAX_CORES]; /*__per_cpu_offset*/
 
@@ -755,8 +758,7 @@ lkd_proc_init (void)
   update_thread_list ();
   do_cleanups (cleanup);
 
-  /* count the h/w threads
-   */
+  /* count the h/w threads */
   max_cores = thread_count ();
   gdb_assert (max_cores);
 
@@ -1410,7 +1412,7 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
     return "";
   }
 
-  /* we use the gdb thread private field for storing the linux_kthread_info_t */
+  /* we use thread_info priv field for storing linux_kthread_info_t */
   ps = (linux_kthread_info_t *) tp->priv;
 
   gdb_assert (ps->comm);
