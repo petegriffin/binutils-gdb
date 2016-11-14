@@ -174,17 +174,7 @@ linux_get_field_size (struct field_info *field)
  *  ptid.lwp = CPU Core
  *  ptid.tid = 0
  *
- * STMC Debug remote uses TID to store the core.
- *  ptid.pid = Inferior PID
- *  ptid.lwp = Process ID
- *  ptid.tid = CPU Core (-1 for not running)
- *
- * linux-kthread now matches the GDB remote usage.
- *
- * These macro's provide a level of indirection through the uses of LKD
- * accessing PTID structures. This allows clear identification of the aim
- * of function reading from the structure, and provides a single place to
- * swap usage if testing with an STMC in the short term.
+ * We store Linux PID in TID.
  */
 
 /* Set the function that supplies registers for an inactive thread for
