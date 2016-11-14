@@ -339,16 +339,6 @@ find_thread_tid (struct thread_info *tp, void *arg)
 }
 
 static int
-find_thread_lwp (struct thread_info *tp, void *arg)
-{
-  long lwp = *(long*)arg;
-
-  DEBUG (TASK, 2, "tp 0x%p ptid.lwp=%d lwp=%d\n", tp, ptid_get_lwp(tp->ptid), lwp);
-
-  return (ptid_get_lwp(tp->ptid) == lwp);
-}
-
-static int
 find_thread_swapper (struct thread_info *tp, void *arg)
 {
   long core = *(long*)arg;
