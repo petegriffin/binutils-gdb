@@ -111,29 +111,29 @@ linux_get_field_size (struct field_info *field)
 		linux_get_field_size (&FIELD_INFO(struct, field))
 #define HAS_FIELD(struct, field) \
 		(FIELD_INFO(struct, field).type != NULL \
-				|| (linux_init_field(&FIELD_INFO(struct, field), 1), \
-						FIELD_INFO(struct, field).type != NULL))
+		 || (linux_init_field(&FIELD_INFO(struct, field), 1),	\
+		     FIELD_INFO(struct, field).type != NULL))
 
 #define DECLARE_ADDR(symb) \
-		static struct addr_info symb = { .name = #symb, .bmsym = {NULL, NULL} }
+  static struct addr_info symb = { .name = #symb, .bmsym = {NULL, NULL} }
 
 #define HAS_ADDR(symb) \
-		(symb.bmsym.minsym != NULL \
-				|| (linux_init_addr(&symb, 1), symb.bmsym.minsym != NULL))
+  (symb.bmsym.minsym != NULL						\
+   || (linux_init_addr(&symb, 1), symb.bmsym.minsym != NULL))
 
 #define ADDR(sym) linux_get_address (&sym)
 
 #define read_unsigned_field(base, struct, field) \
-		read_memory_unsigned_integer (base + F_OFFSET (struct, field), \
+  read_memory_unsigned_integer (base + F_OFFSET (struct, field),	\
 				F_SIZE (struct, field), LKD_BYTE_ORDER)
 
 #define read_signed_field(base, struct, field) \
-		read_memory_integer (base + F_OFFSET (struct, field), \
-				F_SIZE (struct, field), LKD_BYTE_ORDER)
+  read_memory_integer (base + F_OFFSET (struct, field),			\
+		       F_SIZE (struct, field), LKD_BYTE_ORDER)
 
 #define read_pointer_field(base, struct, field) \
-		read_memory_typed_address (base + F_OFFSET (struct, field), \
-				builtin_type (target_gdbarch ())->builtin_data_ptr)
+  read_memory_typed_address (base + F_OFFSET (struct, field),		\
+			     builtin_type (target_gdbarch ())->builtin_data_ptr)
 
 #define read_unsigned_embedded_field(base, struct, field, emb_str, emb_field) \
 		read_memory_unsigned_integer (base + F_OFFSET (struct, field) \
@@ -146,9 +146,9 @@ linux_get_field_size (struct field_info *field)
 				F_SIZE (emb_str, emb_field), LKD_BYTE_ORDER)
 
 #define read_pointer_embedded_field(base, struct, field, emb_str, emb_field) \
-		read_memory_typed_address (base + F_OFFSET (struct, field) \
-				+ F_OFFSET (emb_str, emb_field), \
-				builtin_type (target_gdbarch ())->builtin_data_ptr)
+  read_memory_typed_address (base + F_OFFSET (struct, field)		\
+			     + F_OFFSET (emb_str, emb_field),		\
+			     builtin_type (target_gdbarch ())->builtin_data_ptr)
 
 #define extract_unsigned_field(base, struct, field) \
 		extract_unsigned_integer(base + F_OFFSET (struct, field), \
@@ -159,8 +159,8 @@ linux_get_field_size (struct field_info *field)
 				F_SIZE (struct, field), LKD_BYTE_ORDER)
 
 #define extract_pointer_field(base, struct, field) \
-		extract_typed_address (base + F_OFFSET (struct, field), \
-				builtin_type(target_gdbarch ())->builtin_data_ptr)
+  extract_typed_address (base + F_OFFSET (struct, field),		\
+			 builtin_type(target_gdbarch ())->builtin_data_ptr)
 
 /* Mimic kernel macros */
 #define container_of(ptr, struc, field)  ((ptr) - F_OFFSET(struc, field))
