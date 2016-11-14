@@ -541,8 +541,8 @@ lkd_proc_get_rq_curr (int core)
 CORE_ADDR
 lkd_proc_get_runqueues (int reset)
 {
-      CORE_ADDR swapper = 0;
-      linux_kthread_info_t *test_ps;
+  CORE_ADDR swapper = 0;
+  linux_kthread_info_t *test_ps;
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_runqueues\n");
