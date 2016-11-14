@@ -634,7 +634,8 @@ lkd_proc_get_running (int core)
 	       */
 
 	      current =
-		lkd_proc_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid), core + 1, 0));
+		lkd_proc_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid),
+						 core + 1, 0));
 
 	      gdb_assert(current);
 
@@ -903,7 +904,8 @@ lkd_proc_refresh_info (int cur_core)
 static CORE_ADDR
 _next_task (CORE_ADDR p)
 {
-  CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct, tasks, list_head, next);
+  CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct, tasks,
+						      list_head, next);
 
   if (!cur_entry)
     {
