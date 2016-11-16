@@ -97,6 +97,7 @@ linux_get_field_size (struct field_info *field)
 
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
 
+//TODO remove LKD_BYTE_ORDER
 #define LKD_BYTE_ORDER BFD_ENDIAN_LITTLE
 
 #define FIELD_INFO(s_name, field) _FIELD_##s_name##__##field
@@ -176,6 +177,19 @@ linux_get_field_size (struct field_info *field)
  *
  * We store Linux PID in TID.
  */
+
+/* Architecture-specific hooks.  */
+
+struct linux_kthread_arch_ops
+{
+  void (*to_fetch_registers) (struct regcache *regcache, int regnum,
+			      CORE_ADDR task_struct);
+
+  void (*to_store_registers) (const struct regcache *regcache, int regnum,
+			      CORE_ADDR addr);
+};
+
+
 
 /* Set the function that supplies registers for an inactive thread for
    architecture GDBARCH to SUPPLY_KTHREAD.  */

@@ -69,59 +69,6 @@ static int linux_kthread_active;
 /* the core that triggered the event (zero-based)*/
 int stop_core = 0;
 
-/* Architecture-specific operations.  */
-
-/* Per-architecture data key.  */
-static struct gdbarch_data *linux_kthread_data;
-
-struct linux_kthread_ops
-{
-  /* Supply registers for a thread to a register cache.  */
-  void (*supply_kthread) (struct regcache *, int, CORE_ADDR);
-
-  /* Collect registers for a thread from a register cache.  */
-  void (*collect_kthread) (const struct regcache *, int, CORE_ADDR);
-};
-
-static void *
-linux_kthread_init (struct obstack *obstack)
-{
-  struct linux_kthread_ops *ops;
-
-  ops = OBSTACK_ZALLOC (obstack, struct linux_kthread_ops);
-  return ops;
-}
-
-/* Set the function that supplies registers from an inactive thread
-   for architecture GDBARCH to SUPPLY_UTHREAD.  */
-
-void
-linux_kthread_set_supply_thread (struct gdbarch *gdbarch,
-				 void (*supply_kthread) (struct regcache *,
-							 int, CORE_ADDR))
-{
-  struct linux_kthread_ops *ops
-    = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
-
-  ops->supply_kthread = supply_kthread;
-}
-
-/* Set the function that collects registers for an inactive thread for
-   architecture GDBARCH to SUPPLY_UTHREAD.  */
-
-void
-linux_kthread_set_collect_thread (struct gdbarch *gdbarch,
-				  void (*collect_kthread) (const struct
-							   regcache *, int,
-							   CORE_ADDR))
-{
-  struct linux_kthread_ops *ops
-    = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
-
-  ops->collect_kthread = collect_kthread;
-}
-
-
 static char *
 ptid_to_str (ptid_t ptid)
 {
@@ -1125,8 +1072,7 @@ static int
 linux_kthread_activate (struct objfile *objfile)
 {
   struct gdbarch *gdbarch = target_gdbarch ();
-  struct linux_kthread_ops *ops
-    = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
+  struct linux_kthread_arch_ops *arch_ops = gdbarch_linux_kthread_ops (gdbarch);
 
   /*debug print for existing hw threads from layer beneath */
   if (debug_linuxkthread_threads)
@@ -1141,7 +1087,7 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* There's no point in enabling this module if no
      architecture-specific operations are provided.  */
-  if (!ops->supply_kthread)
+  if (!arch_ops)
     return 0;
 
   /* Verify that this represents an appropriate linux target */
@@ -1232,18 +1178,17 @@ linux_kthread_fetch_registers (struct target_ops *ops,
 			       struct regcache *regcache, int regnum)
 {
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  struct linux_kthread_ops *kthread_ops
-    = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
+  struct linux_kthread_arch_ops *arch_ops = gdbarch_linux_kthread_ops (gdbarch);
+
   CORE_ADDR addr = ptid_get_tid (inferior_ptid);
   struct target_ops *beneath = find_target_beneath (ops);
-
   linux_kthread_info_t *ps;
 
   if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
       return beneath->to_fetch_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code */
-  kthread_ops->supply_kthread(regcache, regnum, ps->task_struct);
+  arch_ops->to_fetch_registers(regcache, regnum, ps->task_struct);
 }
 
 static void
@@ -1251,11 +1196,15 @@ linux_kthread_store_registers (struct target_ops *ops,
 			       struct regcache *regcache, int regnum)
 {
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  struct linux_kthread_ops *kthread_ops
-    = (struct linux_kthread_ops *) gdbarch_data (gdbarch, linux_kthread_data);
+  struct linux_kthread_arch_ops *arch_ops = gdbarch_linux_kthread_ops (gdbarch);
   struct target_ops *beneath = find_target_beneath (ops);
+  linux_kthread_info_t *ps;
 
-  beneath->to_store_registers (beneath, regcache, regnum);
+  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
+      return beneath->to_store_registers (beneath, regcache, regnum);
+
+  /* Call the platform specific code */
+  arch_ops->to_store_registers(regcache, regnum, ps->task_struct);
 }
 
 static ptid_t
@@ -1516,7 +1465,7 @@ _initialize_linux_kthread (void)
 
   complete_target_initialization (linux_kthread_target ());
 
-  linux_kthread_data = gdbarch_data_register_pre_init (linux_kthread_init);
+  //  linux_kthread_data = gdbarch_data_register_pre_init (linux_kthread_init);
 
   observer_attach_inferior_created (linux_kthread_inferior_created);
 

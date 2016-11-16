@@ -1095,6 +1095,9 @@ m:void:iterate_over_objfiles_in_search_order:iterate_over_objfiles_in_search_ord
 # Ravenscar arch-dependent ops.
 v:struct ravenscar_arch_ops *:ravenscar_ops:::NULL:NULL::0:host_address_to_string (gdbarch->ravenscar_ops)
 
+# Linux kthread arch-dependent ops.
+v:struct linux_kthread_arch_ops *:linux_kthread_ops:::NULL:NULL::0:host_address_to_string (gdbarch->linux_kthread_ops)
+
 # Return non-zero if the instruction at ADDR is a call; zero otherwise.
 m:int:insn_is_call:CORE_ADDR addr:addr::default_insn_is_call::0
 
