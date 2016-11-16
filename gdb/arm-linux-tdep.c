@@ -41,7 +41,6 @@
 #include "arm-tdep.h"
 #include "arm-linux-tdep.h"
 #include "linux-tdep.h"
-#include "linux-kthread.h"
 #include "glibc-tdep.h"
 #include "arch-utils.h"
 #include "inferior.h"
@@ -1725,98 +1724,6 @@ arm_linux_skip_trampoline_code (struct frame_info *frame, CORE_ADDR pc)
   return find_solib_trampoline_target (frame, pc);
 }
 
-/* Support for Linux kernel threads */
-
-/* From arm/include/asm/thread_info.h */
-static struct cpu_context_save
-{
-  uint32_t r4;
-  uint32_t r5;
-  uint32_t r6;
-  uint32_t r7;
-  uint32_t r8;
-  uint32_t r9;
-  uint32_t sl;
-  uint32_t fp;
-  uint32_t sp;
-  uint32_t pc;
-} cpu_cxt;
-
-/* This function gets the register values that the schedule() routine
- * has stored away on the stack to be able to restart a sleeping task.
- *
- **/
-
-static void
-arm_linux_supply_thread (struct regcache *regcache,
-			 int regnum, CORE_ADDR task_struct)
-{
-  struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-
-  CORE_ADDR sp = 0;
-  gdb_byte buf[8];
-  int i;
-  uint32_t cpsr;
-  uint32_t thread_info_addr;
-
-  DECLARE_FIELD (thread_info, cpu_context);
-  DECLARE_FIELD (task_struct, stack);
-
-  //  printf_unfiltered("%s:%d regnum(%d) addr(%p)\n",__func__, __LINE__, regnum, task_struct);
-
-  gdb_assert (regnum >= -1);
-
-  /*get thread_info address */
-  thread_info_addr = read_unsigned_field (task_struct, task_struct, stack);
-
-  /*get cpu_context as saved by scheduled */
-  read_memory ((CORE_ADDR) thread_info_addr +
-	       F_OFFSET (thread_info, cpu_context),
-	       (gdb_byte *) & cpu_cxt, sizeof (struct cpu_context_save));
-
-  regcache_raw_supply (regcache, ARM_PC_REGNUM, &cpu_cxt.pc);
-  regcache_raw_supply (regcache, ARM_SP_REGNUM, &cpu_cxt.sp);
-  regcache_raw_supply (regcache, ARM_FP_REGNUM, &cpu_cxt.fp);
-
-  /*general purpose registers */
-  regcache_raw_supply (regcache, 10, &cpu_cxt.sl);
-  regcache_raw_supply (regcache, 9, &cpu_cxt.r9);
-  regcache_raw_supply (regcache, 8, &cpu_cxt.r8);
-  regcache_raw_supply (regcache, 7, &cpu_cxt.r7);
-  regcache_raw_supply (regcache, 6, &cpu_cxt.r6);
-  regcache_raw_supply (regcache, 5, &cpu_cxt.r5);
-  regcache_raw_supply (regcache, 4, &cpu_cxt.r4);
-
-  /* Fake a value for cpsr:T bit.  */
-#define IS_THUMB_ADDR(addr)	((addr) & 1)
-  cpsr = IS_THUMB_ADDR(cpu_cxt.pc) ? arm_psr_thumb_bit (target_gdbarch ()) : 0;
-  regcache_raw_supply (regcache, ARM_PS_REGNUM, &cpsr);
-
-  for (i = 0; i < gdbarch_num_regs (target_gdbarch ()); i++)
-    if (REG_VALID != regcache_register_status (regcache, i))
-      /* Mark other registers as unavailable.  */
-      regcache_invalidate (regcache, i);
-}
-
-static void
-arm_linux_collect_thread (const struct regcache *regcache,
-			   int regnum, CORE_ADDR addr)
-{
-  struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  CORE_ADDR sp = 0;
-  gdb_byte buf[8];
-  int i;
-
-  printf_unfiltered("%s:%d\n",__func__, __LINE__);
-
-  gdb_assert (regnum >= -1);
-
-  gdb_assert (0);
-
-}
-
 static void
 arm_linux_init_abi (struct gdbarch_info info,
 		    struct gdbarch *gdbarch)
@@ -2100,9 +2007,6 @@ arm_linux_init_abi (struct gdbarch_info info,
   arm_linux_record_tdep.arg6 = ARM_A1_REGNUM + 5;
   arm_linux_record_tdep.arg7 = ARM_A1_REGNUM + 6;
 
-  /* Provide a Linux Kernel threads implementation.  */
-  linux_kthread_set_supply_thread (gdbarch, arm_linux_supply_thread);
-  linux_kthread_set_collect_thread (gdbarch, arm_linux_collect_thread);
 
 }
 
