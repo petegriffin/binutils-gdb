@@ -67,7 +67,8 @@ arm_linuxkthread_fetch_registers (struct regcache *regcache,
   gdb_assert (regnum >= -1);
 
   /*get thread_info address */
-  thread_info_addr = read_unsigned_field (task_struct, task_struct, stack);
+  thread_info_addr = read_unsigned_field (task_struct, task_struct, stack,
+					  byte_order);
 
   /*get cpu_context as saved by scheduled */
   read_memory ((CORE_ADDR) thread_info_addr +

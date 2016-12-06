@@ -97,9 +97,6 @@ linux_get_field_size (struct field_info *field)
 
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
 
-//TODO remove LKD_BYTE_ORDER
-#define LKD_BYTE_ORDER BFD_ENDIAN_LITTLE
-
 #define FIELD_INFO(s_name, field) _FIELD_##s_name##__##field
 
 #define DECLARE_FIELD(s_name, field) \
@@ -124,40 +121,40 @@ linux_get_field_size (struct field_info *field)
 
 #define ADDR(sym) linux_get_address (&sym)
 
-#define read_unsigned_field(base, struct, field) \
+#define read_unsigned_field(base, struct, field, byteorder)		\
   read_memory_unsigned_integer (base + F_OFFSET (struct, field),	\
-				F_SIZE (struct, field), LKD_BYTE_ORDER)
+				F_SIZE (struct, field), byteorder)
 
-#define read_signed_field(base, struct, field) \
+#define read_signed_field(base, struct, field, byteorder) \
   read_memory_integer (base + F_OFFSET (struct, field),			\
-		       F_SIZE (struct, field), LKD_BYTE_ORDER)
+		       F_SIZE (struct, field), byteorder)
 
 #define read_pointer_field(base, struct, field) \
   read_memory_typed_address (base + F_OFFSET (struct, field),		\
 			     builtin_type (target_gdbarch ())->builtin_data_ptr)
 
-#define read_unsigned_embedded_field(base, struct, field, emb_str, emb_field) \
+#define read_unsigned_embedded_field(base, struct, field, emb_str, emb_field, byteorder) \
 		read_memory_unsigned_integer (base + F_OFFSET (struct, field) \
 				+ F_OFFSET (emb_str, emb_field), \
-				F_SIZE (emb_str, emb_field), LKD_BYTE_ORDER)
+				F_SIZE (emb_str, emb_field), byteorder)
 
-#define read_signed_embedded_field(base, struct, field, emb_str, emb_field) \
+#define read_signed_embedded_field(base, struct, field, emb_str, emb_field, byteorder) \
 		read_memory_integer (base + F_OFFSET (struct, field) \
 				+ F_OFFSET (emb_str, emb_field), \
-				F_SIZE (emb_str, emb_field), LKD_BYTE_ORDER)
+				F_SIZE (emb_str, emb_field), byteorder)
 
 #define read_pointer_embedded_field(base, struct, field, emb_str, emb_field) \
   read_memory_typed_address (base + F_OFFSET (struct, field)		\
 			     + F_OFFSET (emb_str, emb_field),		\
 			     builtin_type (target_gdbarch ())->builtin_data_ptr)
 
-#define extract_unsigned_field(base, struct, field) \
+#define extract_unsigned_field(base, struct, field, byteorder)			\
 		extract_unsigned_integer(base + F_OFFSET (struct, field), \
-				F_SIZE (struct, field), LKD_BYTE_ORDER)
+				F_SIZE (struct, field), byteorder)
 
-#define extract_signed_field(base, struct, field) \
+#define extract_signed_field(base, struct, field, byteorder)			\
 		extract_signed_integer (base + F_OFFSET (struct, field), \
-				F_SIZE (struct, field), LKD_BYTE_ORDER)
+				F_SIZE (struct, field), byteorder)
 
 #define extract_pointer_field(base, struct, field) \
   extract_typed_address (base + F_OFFSET (struct, field),		\

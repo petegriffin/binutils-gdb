@@ -318,6 +318,7 @@ static void
 get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 	       int core /*zero-based */ )
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   linux_kthread_info_t *l_ps;
   size_t size;
   unsigned char *task_name;
@@ -373,15 +374,15 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
       read_memory (task_struct, scratch_buf, size);
 
       l_ps->task_struct = task_struct;
-      tid = extract_unsigned_field (scratch_buf, task_struct, pid);
+      tid = extract_unsigned_field (scratch_buf, task_struct, pid, byte_order);
       l_ps->mm = extract_pointer_field (scratch_buf,
 					task_struct, mm);
       l_ps->active_mm = extract_pointer_field (scratch_buf,
 					       task_struct, active_mm);
       l_ps->tgid = extract_unsigned_field (scratch_buf,
-					 task_struct, tgid);
+					   task_struct, tgid, byte_order);
       l_ps->prio = extract_unsigned_field (scratch_buf,
-					   task_struct, prio);
+					   task_struct, prio, byte_order);
       l_ps->core = core;	/* for to_core_of_threads */
 
       /* add square brackets to name for kernel threads */
@@ -467,6 +468,7 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 CORE_ADDR
 lkd_proc_get_rq_curr (int core)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr\n");
@@ -479,7 +481,7 @@ lkd_proc_get_rq_curr (int core)
       curr_addr =
 	curr_addr + (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, curr);
       rq_curr[core] = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
-						    LKD_BYTE_ORDER);
+						    byte_order);
     }
 
   return rq_curr[core];
@@ -488,6 +490,7 @@ lkd_proc_get_rq_curr (int core)
 CORE_ADDR
 lkd_proc_get_runqueues (int reset)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR swapper = 0;
   linux_kthread_info_t *test_ps;
 
@@ -517,7 +520,7 @@ lkd_proc_get_runqueues (int reset)
 					      magic);
 
 	  if ((read_memory_unsigned_integer (lock_magic, 4 /*uint32 */ ,
-					     LKD_BYTE_ORDER) & 0xdead0000)
+					     byte_order) & 0xdead0000)
 	      != 0xdead0000)
 	    error ("accessing the core runqueues seems to be compromised.");
 	}
@@ -619,6 +622,7 @@ lkd_proc_is_curr_task (linux_kthread_info_t * ps)
 static CORE_ADDR
 get_rq_idle (int core)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR curr_addr = lkd_proc_get_runqueues (0);
 
   if (!curr_addr || !HAS_FIELD (rq, idle))
@@ -629,7 +633,7 @@ get_rq_idle (int core)
       curr_addr += (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, idle);
 
       rq_idle[core] = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
-						    LKD_BYTE_ORDER);
+						    byte_order);
     }
 
   return rq_idle[core];
@@ -638,6 +642,7 @@ get_rq_idle (int core)
 static int
 get_process_count (int core)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR curr_addr = (CORE_ADDR) per_cpu_offset[core];
   int proc_cnt;
   static int warned = 0;
@@ -661,9 +666,9 @@ get_process_count (int core)
       return warned;
     }
 
-  /* TODO remove LKD_BYTE_ORDER. Also shouldn't hard code 4 here */
+  /* TODO shouldn't hard code 4 here */
   proc_cnt = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
-					   LKD_BYTE_ORDER);
+					   byte_order);
 
     if (debug_linuxkthread_threads)
       fprintf_unfiltered (gdb_stdlog, "core(%d) curr_addr=0x%lx proc_cnt=%d\n",
@@ -676,12 +681,13 @@ static int
 get_last_pid (void)
 {
   int new_last_pid = 0;
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
 
   if (HAS_ADDR (init_pid_ns))
     {
       /* Since STLinux 2.3 (2.6.23) */
       new_last_pid = read_signed_field (ADDR (init_pid_ns),
-					pid_namespace, last_pid);
+					pid_namespace, last_pid, byte_order);
     }
   else
     printf_filtered ("this kernel does not support `init_pid_ns`\n");
@@ -849,8 +855,10 @@ lkd_proc_refresh_info (int cur_core)
 static CORE_ADDR
 _next_task (CORE_ADDR p)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct, tasks,
-						      list_head, next);
+						      list_head, next,
+						      byte_order);
 
   if (!cur_entry)
     {
@@ -864,9 +872,11 @@ _next_task (CORE_ADDR p)
 static CORE_ADDR
 _next_thread (CORE_ADDR p)
 {
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR cur_entry = read_unsigned_embedded_field (p, task_struct,
 						      thread_group,
-						      list_head, next);
+						      list_head, next,
+						      byte_order);
 
   if (!cur_entry)
     {
@@ -1212,6 +1222,8 @@ linux_kthread_wait (struct target_ops *ops,
 		    ptid_t ptid, struct target_waitstatus *status,
 		    int options)
 {
+  struct gdbarch *gdbarch = target_gdbarch ();
+  struct linux_kthread_arch_ops *arch_ops = gdbarch_linux_kthread_ops (gdbarch);
   struct target_ops *beneath = find_target_beneath (ops);
   ptid_t stop_ptid;
   CORE_ADDR pc;
