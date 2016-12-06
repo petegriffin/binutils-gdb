@@ -438,7 +438,7 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
   if (!l_ps->gdb_thread)
    {
      if (debug_linuxkthread_threads)
-       fprintf_unfiltered (gdb_stdlog, "allocate a new thread");
+       fprintf_unfiltered (gdb_stdlog, "allocate a new thread\n");
 
       /* add with info so that pid_to_string works. */
       l_ps->gdb_thread =  add_thread_with_info (this_ptid,
@@ -615,6 +615,9 @@ lkd_proc_get_running (int core)
 int
 lkd_proc_is_curr_task (linux_kthread_info_t * ps)
 {
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_is_curr_task\n");
+
   return (ps && (ps == lkd_proc_get_running (ps->core)));
 }
 
@@ -760,6 +763,9 @@ lkd_proc_refresh_info (int cur_core)
   linux_kthread_info_t *ps;
   int do_invalidate = 0;
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n", cur_core);
+
   memset (running_process, 0, max_cores * sizeof (linux_kthread_info_t *));
   memset (current_thread_info, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (current_task_struct, 0, max_cores * (sizeof (CORE_ADDR)));
@@ -894,6 +900,9 @@ get_list_helper (linux_kthread_info_t ** ps)
   CORE_ADDR g, t, init_task_addr;
   int core;
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "get_list_helper\n");
+
   init_task_addr = ADDR (init_task);
   g = init_task_addr;
   core = 0;
@@ -996,7 +1005,7 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 
   if (tid)
     {
-	  /* non-swapper, tis is Linux pid */
+	  /* non-swapper, tid is Linux pid */
 	  tp = iterate_over_threads (find_thread_tid, (void *) &tid);
     }
   else
@@ -1210,6 +1219,9 @@ linux_kthread_store_registers (struct target_ops *ops,
   struct target_ops *beneath = find_target_beneath (ops);
   linux_kthread_info_t *ps;
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_store_registers\n");
+
   if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
       return beneath->to_store_registers (beneath, regcache, regnum);
 
@@ -1296,21 +1308,21 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
   struct target_ops *beneath = find_target_beneath (ops);
   linux_kthread_info_t *ps;
 
-  if (debug_linuxkthread_targetops)
-    fprintf_unfiltered (gdb_stdlog, "linux_kthread_thread_alive ptid=%s",
+  if (debug_linuxkthread_targetops > 2)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_thread_alive ptid=%s\n",
 			ptid_to_str(ptid));
 
   ps = lkd_proc_get_by_ptid (ptid);
 
   if (!ps)
     {
-      if (debug_linuxkthread_threads)
+      if (debug_linuxkthread_threads > 2)
 	fprintf_unfiltered (gdb_stdlog, "Prune thread ps(%p)\n",ps);
 
       return 0;
     }
 
-  if (debug_linuxkthread_threads)
+  if (debug_linuxkthread_threads > 2)
     fprintf_unfiltered (gdb_stdlog, "Alive thread ps(%p)\n",ps);
 
   return 1;
