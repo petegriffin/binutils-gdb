@@ -1428,8 +1428,6 @@ linux_kthread_wait (struct target_ops *ops,
   struct target_ops *beneath = find_target_beneath (ops);
   ptid_t stop_ptid;
   CORE_ADDR pc;
-  CORE_ADDR task;
-  int i;
   struct regcache *regcache;
 
   if (debug_linuxkthread_targetops)
