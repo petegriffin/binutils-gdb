@@ -1294,11 +1294,7 @@ linux_kthread_close (struct target_ops *self)
   if (debug_linuxkthread_targetops)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_close\n");
 
-  linux_kthread_active = 0;
-
-  wait_process = NULL;
-
-  lkd_proc_free_list ();
+  linux_kthread_active=0;
 
   /* Reset global variables */
   fields_and_addrs_clear ();
@@ -1318,12 +1314,22 @@ linux_kthread_deactivate (void)
   if (!linux_kthread_active)
     return;
 
+  wait_process = NULL;
+
+  lkd_proc_invalidate_list();
+
   lkd_proc_free_list ();
-  
+
   /* fallback to any thread that makes sense for the beneath target */
   //lkd_reset_thread_list ();
 
   unpush_target (linux_kthread_ops);
+
+  prune_threads();
+
+  lkd_free_cpucore_data(max_cores);
+
+  linux_kthread_active = 0;
 }
 
 static void
