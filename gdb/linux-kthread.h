@@ -119,7 +119,13 @@ linux_get_field_size (struct field_info *field)
   (symb.bmsym.minsym != NULL						\
    || (linux_init_addr(&symb, 1), symb.bmsym.minsym != NULL))
 
+#define HAS_ADDR_PTR(symb) \
+  (symb->bmsym.minsym != NULL						\
+   || (linux_init_addr(symb, 1), symb->bmsym.minsym != NULL))
+
 #define ADDR(sym) linux_get_address (&sym)
+
+#define ADDR_PTR(sym) linux_get_address (sym)
 
 #define read_unsigned_field(base, struct, field, byteorder)		\
   read_memory_unsigned_integer (base + F_OFFSET (struct, field),	\
