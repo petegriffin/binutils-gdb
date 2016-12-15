@@ -694,8 +694,11 @@ static CORE_ADDR
 get_rq_idle (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+  int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_func_ptr);
   CORE_ADDR curr_addr = lkd_proc_get_runqueues ();
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "get_rq_idle core(%d)\n", core);
 
   if (!curr_addr || !HAS_FIELD (rq, idle))
     return 0;
@@ -704,7 +707,7 @@ get_rq_idle (int core)
     {
       curr_addr += (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, idle);
 
-      rq_idle[core] = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
+      rq_idle[core] = read_memory_unsigned_integer (curr_addr, length,
 						    byte_order);
     }
 
