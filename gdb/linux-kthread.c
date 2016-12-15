@@ -761,7 +761,7 @@ get_last_pid (void)
 					pid_namespace, last_pid, byte_order);
     }
   else
-    printf_filtered ("this kernel does not support `init_pid_ns`\n");
+    fprintf_unfiltered (gdb_stdlog, "this kernel does not support `init_pid_ns`\n");
 
   return new_last_pid;
 };
