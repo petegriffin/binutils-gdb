@@ -184,6 +184,8 @@ struct linux_kthread_arch_ops
 
   void (*to_store_registers) (const struct regcache *regcache, int regnum,
 			      CORE_ADDR addr);
+
+  int (*is_kernel_address)  (const CORE_ADDR addr);
 };
 
 
