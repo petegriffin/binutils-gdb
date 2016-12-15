@@ -1362,8 +1362,11 @@ linux_kthread_fetch_registers (struct target_ops *ops,
   struct target_ops *beneath = find_target_beneath (ops);
   linux_kthread_info_t *ps;
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_fetch_registers\n");
+
   if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
-      return beneath->to_fetch_registers (beneath, regcache, regnum);
+    return beneath->to_fetch_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code */
   arch_ops->to_fetch_registers(regcache, regnum, ps->task_struct);
