@@ -874,7 +874,7 @@ lkd_proc_init (void)
 int
 lkd_proc_refresh_info (int cur_core)
 {
-  int i = max_cores;
+  int core;
   int new_last_pid;
   linux_kthread_info_t *ps;
   int do_invalidate = 0;
@@ -893,21 +893,21 @@ lkd_proc_refresh_info (int cur_core)
     }
 
   /* check if a process exited */
-  for (i = 0; i < max_cores; i++)
+  for (core = 0; core < max_cores; core++)
     {
-      int new_pcount = get_process_count (i);
+      int new_pcount = get_process_count (core);
 
       /* if primary core has no processes kernel hasn't started */
-      if (i == 0 && new_pcount == 0)
+      if (core == 0 && new_pcount == 0)
 	{
 	  warning ("Primary core has no processes - has kernel started?\n");
 	  warning ("linux-kthread will deactivate\n");
 	  return 0;
 	}
 
-      if (new_pcount != kthread_process_counts[i])
+      if (new_pcount != kthread_process_counts[core])
 	{
-	  kthread_process_counts[i] = new_pcount;
+	  kthread_process_counts[core] = new_pcount;
 	  do_invalidate = 1;
 	}
     }
@@ -935,8 +935,8 @@ lkd_proc_refresh_info (int cur_core)
    *
    * Now set the tid according to the running core,
    * */
-  for (i = 0; i < max_cores; i++)
-    lkd_proc_get_running (i);
+  for (core = 0; core < max_cores; core++)
+    lkd_proc_get_running (core);
 
   wait_process = lkd_proc_get_running (cur_core);
 
