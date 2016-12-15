@@ -555,6 +555,8 @@ CORE_ADDR
 lkd_proc_get_runqueues (void)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+  int length =
+    TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_int);
   CORE_ADDR swapper = 0;
   linux_kthread_info_t *test_ps;
 
@@ -578,12 +580,14 @@ lkd_proc_get_runqueues (void)
       if (HAS_FIELD (raw_spinlock, magic))
 	{
 
+	  //TODO http://lxr.free-electrons.com/source/include/linux/spinlock_types.h?v=3.14#L32
+
 	  CORE_ADDR lock_magic = ADDR (runqueues)
 	    + (CORE_ADDR) per_cpu_offset[0]
 	    + F_OFFSET (rq, lock) + F_OFFSET (raw_spinlock,
 					      magic);
 
-	  if ((read_memory_unsigned_integer (lock_magic, 4 /*uint32 */ ,
+	  if ((read_memory_unsigned_integer (lock_magic, length,
 					     byte_order) & 0xdead0000)
 	      != 0xdead0000)
 	    error ("accessing the core runqueues seems to be compromised.");
