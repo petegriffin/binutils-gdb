@@ -52,7 +52,7 @@ static linux_kthread_info_t *lkd_proc_get_list (void);
 static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
 static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkd_proc_get_running (int core);
-static CORE_ADDR lkd_proc_get_runqueues (int reset);
+static CORE_ADDR lkd_proc_get_runqueues (void);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
 static void lkd_proc_init (void);
 static void lkd_proc_free_list(void);
@@ -530,7 +530,7 @@ lkd_proc_get_rq_curr (int core)
 
   if (!rq_curr[core])
     {
-      CORE_ADDR curr_addr = lkd_proc_get_runqueues (0);
+      CORE_ADDR curr_addr = lkd_proc_get_runqueues ();
       if (!curr_addr)
 	return 0;
       curr_addr =
@@ -543,7 +543,7 @@ lkd_proc_get_rq_curr (int core)
 };
 
 CORE_ADDR
-lkd_proc_get_runqueues (int reset)
+lkd_proc_get_runqueues (void)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR swapper = 0;
@@ -621,7 +621,7 @@ lkd_proc_get_running (int core)
   if (running_process[core] == NULL)
     {
 
-      gdb_assert (lkd_proc_get_runqueues (0));
+      gdb_assert (lkd_proc_get_runqueues ());
 
       task = lkd_proc_get_rq_curr (core);
 
@@ -681,7 +681,8 @@ static CORE_ADDR
 get_rq_idle (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
-  CORE_ADDR curr_addr = lkd_proc_get_runqueues (0);
+  CORE_ADDR curr_addr = lkd_proc_get_runqueues ();
+
 
   if (!curr_addr || !HAS_FIELD (rq, idle))
     return 0;
