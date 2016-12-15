@@ -84,8 +84,8 @@ ptid_to_str (ptid_t ptid)
 /* Symbol and Field resolutions */
 
 /* Storage for the field layout and addresses already gathered. */
-static struct field_info *field_info;
-static struct addr_info *addr_info;
+static struct field_info *field_info_list;
+static struct addr_info *addr_info_list;
 
 /* Called by ADDR to fetch the address of a symbol declared using
  DECLARE_ADDR. */
@@ -109,8 +109,8 @@ linux_init_addr (struct addr_info *addr, int check)
     }
 
   /* Chain initialized entries for cleanup. */
-  addr->next = addr_info;
-  addr_info = addr;
+  addr->next = addr_info_list;
+  addr_info_list = addr;
 
   if (debug_linuxkthread_symbols)
     fprintf_unfiltered (gdb_stdlog, "%s address is %s\n", addr->name,
@@ -186,8 +186,8 @@ linux_init_field (struct field_info *field, int check)
     }
 
   /* Chain initialized entries for cleanup. */
-  field->next = field_info;
-  field_info = field;
+  field->next = field_info_list;
+  field_info_list = field;
 
   if (debug_linuxkthread_symbols)
     fprintf_unfiltered (gdb_stdlog, "%s::%s => offset %i  size %i\n"
@@ -200,24 +200,24 @@ linux_init_field (struct field_info *field, int check)
 static void
 fields_and_addrs_clear (void)
 {
-  struct field_info *next_field = field_info;
-  struct addr_info *next_addr = addr_info;
+  struct field_info *next_field = field_info_list;
+  struct addr_info *next_addr = addr_info_list;
 
   while (next_field)
     {
-      next_field = field_info->next;
-      field_info->type = NULL;
-      field_info->next = NULL;
-      field_info = next_field;
+      next_field = field_info_list->next;
+      field_info_list->type = NULL;
+      field_info_list->next = NULL;
+      field_info_list = next_field;
     }
 
   while (next_addr)
     {
-      next_addr = addr_info->next;
-      addr_info->bmsym.minsym = NULL;
-      addr_info->bmsym.objfile = NULL;
-      addr_info->next = NULL;
-      addr_info = next_addr;
+      next_addr = addr_info_list->next;
+      addr_info_list->bmsym.minsym = NULL;
+      addr_info_list->bmsym.objfile = NULL;
+      addr_info_list->next = NULL;
+      addr_info_list = next_addr;
     }
 }
 
