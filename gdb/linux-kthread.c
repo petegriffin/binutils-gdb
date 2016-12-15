@@ -1011,6 +1011,8 @@ _next_thread (CORE_ADDR p)
 static linux_kthread_info_t **
 get_list_helper (linux_kthread_info_t ** ps)
 {
+  struct linux_kthread_arch_ops *arch_ops =
+    gdbarch_linux_kthread_ops (target_gdbarch ());
   CORE_ADDR g, t, init_task_addr;
   int core;
 
@@ -1027,14 +1029,13 @@ get_list_helper (linux_kthread_info_t ** ps)
       do
         {
 
-#if 0
-	  /* todo replace with a arch specific helper which checks versus CONFIG_PAGEOFFSET */
-          if (!linux_awareness_ops->lo_is_kernel_address (t))
+	  if (!arch_ops->is_kernel_address(t))
 	    {
-              warning ("parsing of task list stopped because of invalid address %s", phex (t, 4));
+	      warning ("parsing of task list stopped because of invalid address"
+		       "%s", phex (t, 4));
               break;
 	    }
-#endif
+
           get_task_info (t, ps, core /*zero-based */ );
           core = CORE_INVAL;
 
@@ -1214,6 +1215,8 @@ linux_kthread_activate (struct objfile *objfile)
 {
   struct gdbarch *gdbarch = target_gdbarch ();
   struct linux_kthread_arch_ops *arch_ops = gdbarch_linux_kthread_ops (gdbarch);
+  struct regcache *regcache;
+  CORE_ADDR pc;
 
   /*debug print for existing hw threads from layer beneath */
   if (debug_linuxkthread_threads)
@@ -1241,6 +1244,20 @@ linux_kthread_activate (struct objfile *objfile)
   scratch_buf = (unsigned char *) xcalloc (scratch_buf_size, sizeof (char));
 
   kthread_list_invalid = TRUE;
+
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
+			kthread_list_invalid);
+
+  /* check program counter is a kernel address. Using regcache_read_pc()
+     is OK here as we haven't pushed are stratum yet */
+  regcache = get_thread_regcache (inferior_ptid);
+  pc = regcache_read_pc (regcache);
+  if (!arch_ops->is_kernel_address(pc))
+  {
+    printf_unfiltered("linux_kthread_wait() target stopped in user space!!\n");
+    return 0;
+  }
 
   lkd_proc_init ();
 
@@ -1367,6 +1384,33 @@ linux_kthread_store_registers (struct target_ops *ops,
   arch_ops->to_store_registers(regcache, regnum, ps->task_struct);
 }
 
+/* Use layer beneath to get the physical CPU PC register. We can't use
+regcache_read_pc() as it can vector through linux_kthread_fetch_registers which
+itself needs to read kernel memory to determine whether to use the layer
+beneath or not (see above) */
+CORE_ADDR linux_kthread_get_pc(struct target_ops *ops)
+{
+  struct gdbarch *gdbarch = target_gdbarch ();
+  struct target_ops *beneath = find_target_beneath (ops);
+  struct regcache *regcache;
+  CORE_ADDR pc;
+  int regnum;
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux-kthread_get_pc\n");
+
+  regcache = get_thread_regcache (inferior_ptid);
+  regnum = gdbarch_pc_regnum (gdbarch);
+
+  gdb_assert(regnum > 0);
+
+  beneath->to_fetch_registers (beneath, regcache, regnum);
+
+  regcache_raw_collect (regcache, regnum, &pc);
+
+  return pc;
+}
+
 static ptid_t
 linux_kthread_wait (struct target_ops *ops,
 		    ptid_t ptid, struct target_waitstatus *status,
@@ -1386,6 +1430,15 @@ linux_kthread_wait (struct target_ops *ops,
 
   /* Pass the request to the layer beneath.  */
   stop_ptid = beneath->to_wait (beneath, ptid, status, options);
+
+  pc = linux_kthread_get_pc(ops);
+
+  if (!arch_ops->is_kernel_address(pc))
+  {
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_wait() target stopped in user space\n");
+    linux_kthread_deactivate();
+    return stop_ptid;
+  }
 
   if (max_cores > 1)
     stop_core = ptid_get_tid (stop_ptid) - 1;
