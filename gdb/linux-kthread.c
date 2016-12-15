@@ -756,7 +756,7 @@ get_last_pid (void)
 
   if (HAS_ADDR (init_pid_ns))
     {
-      /* Since STLinux 2.3 (2.6.23) */
+      /* Since 2.6.23 */
       new_last_pid = read_signed_field (ADDR (init_pid_ns),
 					pid_namespace, last_pid, byte_order);
     }
