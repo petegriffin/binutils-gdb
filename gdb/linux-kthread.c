@@ -310,29 +310,30 @@ DECLARE_ADDR (per_cpu__runqueues);
 DECLARE_ADDR (runqueues);
 
 
-/* TODO dynamically allocate memory based on thread_count() */
-#define MAX_CORES 5
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
-int max_cores = MAX_CORES;
-
+int max_cores = CORE_INVAL;
 
 /* The current task. */
 /* the processes list from Linux perspective */
 linux_kthread_info_t *process_list = NULL;
 /* the process we stopped at in target_wait */
 linux_kthread_info_t *wait_process = NULL;
-/* scheduled process as seen by each core */
-linux_kthread_info_t *running_process[MAX_CORES];
-
-uint32_t per_cpu_offset[MAX_CORES]; /*__per_cpu_offset*/
 
 /* per cpu peeks */
 CORE_ADDR runqueues_addr;
-CORE_ADDR rq_curr[MAX_CORES];	/*cur_rq(cpu) */
-CORE_ADDR rq_idle[MAX_CORES];	/*rq->idle */
 
-/* process list housekeeping*/
-static unsigned long kthread_process_counts[MAX_CORES];
+/*__per_cpu_offset*/
+CORE_ADDR *per_cpu_offset;
+
+/* array of cur_rq(cpu) on each cpu */
+CORE_ADDR *rq_curr;
+/*array of rq->idle on each cpu */
+CORE_ADDR *rq_idle;
+/* array of scheduled process on each core */
+linux_kthread_info_t **running_process = NULL;
+/* array of process_counts for each cpu used for process list housekeeping */
+static unsigned long *kthread_process_counts;
+
 static int last_pid;
 
 static int
@@ -754,14 +755,90 @@ get_last_pid (void)
   return new_last_pid;
 };
 
+void lkd_reset_data(int numcores)
+{
+  memset (running_process, 0x0, numcores * sizeof (linux_kthread_info_t *));
+  memset (rq_curr, 0x0, numcores * sizeof (CORE_ADDR));
+  memset (rq_idle, 0x0, numcores * sizeof (CORE_ADDR));
+
+  memset (per_cpu_offset, 0, numcores * sizeof (CORE_ADDR));
+}
+
+void lkd_allocate_cpucore_data(int numcores)
+{
+  gdb_assert (numcores >= 1);
+
+  running_process = XNEWVEC (linux_kthread_info_t *, numcores);
+  kthread_process_counts = XNEWVEC (unsigned long, numcores);
+
+  per_cpu_offset = XNEWVEC (CORE_ADDR, numcores);
+  rq_curr = XNEWVEC (CORE_ADDR, numcores);
+  rq_idle = XNEWVEC (CORE_ADDR, numcores);
+
+  memset (kthread_process_counts, 0, sizeof (unsigned long));
+  lkd_reset_data(numcores);
+}
+
+void lkd_free_cpucore_data(int numcores)
+{
+  xfree(running_process);
+  xfree(kthread_process_counts);
+  xfree(per_cpu_offset);
+  xfree(rq_curr);
+  xfree(rq_idle);
+}
+
+void get_per_cpu_offsets(int numcores)
+{
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+  int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_data_ptr);
+  CORE_ADDR curr_addr = ADDR (__per_cpu_offset);
+  int core;
+
+
+  if (!HAS_ADDR (__per_cpu_offset))
+    {
+      if (debug_linuxkthread_threads)
+	fprintf_unfiltered (gdb_stdlog, "Assuming non-SMP kernel.\n");
+
+      return;
+    }
+
+    //asm-generic/percpu.h
+    //extern unsigned long __per_cpu_offset[NR_CPUS];
+
+    for (core=0; core < numcores; core++)
+      {
+	if (!per_cpu_offset[core])
+	  per_cpu_offset[core] = read_memory_unsigned_integer (curr_addr,
+							       length,
+							       byte_order);
+
+	curr_addr += (CORE_ADDR) length;
+
+	if (!per_cpu_offset[core])
+	  {
+	    warning ("Suspicious null per-cpu offsets,"
+		     " or wrong number of detected cores:\n"
+		     "ADDR (__per_cpu_offset) = %s\nmax_cores = %d",
+		     phex (ADDR (__per_cpu_offset),4), max_cores);
+
+	    break;
+	  }
+      }
+
+    if (debug_linuxkthread_threads)
+      fprintf_unfiltered (gdb_stdlog, "SMP kernel. %d cores detected\n",
+			  numcores);
+}
+
 void
 lkd_proc_init (void)
 {
-  int i = MAX_CORES;
   struct thread_info *th = NULL;
   struct cleanup *cleanup;
-
-  memset (per_cpu_offset, 0, MAX_CORES * sizeof (uint32_t));
+  int size =
+    TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_long);
 
   /* ensure thread list from beneath target is up to date */
   cleanup = make_cleanup_restore_integer (&print_thread_events);
@@ -773,43 +850,15 @@ lkd_proc_init (void)
   max_cores = thread_count ();
   gdb_assert (max_cores);
 
-  if (HAS_ADDR (__per_cpu_offset))
-    {
-      int core = max_cores;
+  /* allocate per cpu data */
+  lkd_allocate_cpucore_data(max_cores);
 
-      read_memory (ADDR (__per_cpu_offset),
-		   (gdb_byte *) (per_cpu_offset),
-		   max_cores * sizeof (uint32_t));
+  get_per_cpu_offsets(max_cores);
 
-      while (--core)
-	if (!per_cpu_offset[core])
-	  {
-	    warning ("Suspicious null per-cpu offsets,"
-		     " or wrong number of detected cores:\n"
-		     "ADDR (__per_cpu_offset) = %s\nmax_cores = %d",
-		     phex (ADDR (__per_cpu_offset),4), max_cores);
-	    break;
-	  }
-    }
-  else
-    {
-        if (debug_linuxkthread_threads)
-	  fprintf_unfiltered (gdb_stdlog, "Assuming non-SMP kernel.\n");
-    }
-
-  if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "SMP kernel. %d cores detected\n",
-			max_cores);
-
-  if (!lkd_proc_get_runqueues (1 /*reset */ ) && (max_cores > 1))
-    printf_filtered ("\nCould not find the address of cpu runqueues:"
-		     "\ncurrent context information maybe less precise\n.");
+  if (!lkd_proc_get_runqueues () && (max_cores > 1))
+    fprintf_unfiltered (gdb_stdlog, "Could not find the address of CPU"
+			"runqueues current context information maybe less precise\n.");
 }
-
-/* still useful with non-smp systems
- **/
-CORE_ADDR current_task_struct[MAX_CORES];
-CORE_ADDR current_thread_info[MAX_CORES];
 
 int
 lkd_proc_refresh_info (int cur_core)
@@ -823,8 +872,6 @@ lkd_proc_refresh_info (int cur_core)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n", cur_core);
 
   memset (running_process, 0, max_cores * sizeof (linux_kthread_info_t *));
-  memset (current_thread_info, 0, max_cores * (sizeof (CORE_ADDR)));
-  memset (current_task_struct, 0, max_cores * (sizeof (CORE_ADDR)));
   memset (rq_curr, 0, max_cores * sizeof (CORE_ADDR));
 
   new_last_pid = get_last_pid ();
