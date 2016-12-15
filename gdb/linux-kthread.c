@@ -520,14 +520,21 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
   l_ps->old_ptid = PTID_OF (l_ps);
 }
 
-/*attempt getting the runqueue address for a core*/
+/*attempt getting the runqueue address for a core
+
+See struct rq here
+http://lxr.free-electrons.com/source/kernel/sched/sched.h?v=3.14#L524
+
+*/
 CORE_ADDR
 lkd_proc_get_rq_curr (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+  int length =
+    TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_data_ptr);
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr\n");
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr core(%d)\n", core);
 
   if (!rq_curr[core])
     {
@@ -536,7 +543,8 @@ lkd_proc_get_rq_curr (int core)
 	return 0;
       curr_addr =
 	curr_addr + (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, curr);
-      rq_curr[core] = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
+
+      rq_curr[core] = read_memory_unsigned_integer (curr_addr, length,
 						    byte_order);
     }
 
