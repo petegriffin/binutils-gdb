@@ -1263,8 +1263,6 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
-  /* TODO: Need arch specific callback (to check MMU / VM support etc) */
-
   lkd_proc_invalidate_list ();
 
   /* to get correct thread names from add_thread_with_info()
