@@ -30,6 +30,8 @@
 #include "target.h"
 
 #include "gdb_obstack.h"
+#include "macroscope.h"
+#include "symtab.h"
 
 #include "linux-kthread.h"
 
@@ -216,6 +218,59 @@ fields_and_addrs_clear (void)
       addr_info->bmsym.objfile = NULL;
       addr_info->next = NULL;
       addr_info = next_addr;
+    }
+}
+
+/* this function checks a macro definition at a particular symbol
+   returns the replacement string or NULL if not found */
+const char * kthread_find_macro_at_symbol(struct addr_info *symbol, char *macroname)
+{
+  struct symtab_and_line sal;
+  struct macro_scope *ms = NULL;
+  struct macro_definition *d;
+
+  if (debug_linuxkthread_symbols)
+    fprintf_filtered (gdb_stdout, "kthread_find_macro_at_symbol symbol=%s"
+		      "macro %s\n", symbol->name, macroname);
+  if (!macroname)
+    {
+      printf_filtered("No macro name provided\n");
+      return NULL;
+    }
+
+  if (!HAS_ADDR_PTR(symbol))
+    {
+      printf_filtered("symbol doesn't exist\n");
+      return NULL;
+    }
+
+  /* get symtab for the address of the symbol */
+  sal = find_pc_line(ADDR_PTR(symbol), 0);
+
+  /* get macro scope for that symtab */
+  ms = sal_macro_scope (sal);
+
+  if (!ms)
+    {
+      fprintf_filtered (gdb_stdout, "GDB has no preprocessor macro information"
+			"for %s. Compile with -g3\n", symbol->name);
+      return NULL;
+    }
+
+  d = macro_lookup_definition (ms->file, ms->line, macroname);
+  xfree(ms);
+
+  if (d)
+    {
+      return d->replacement;
+    }
+  else
+    {
+      fprintf_filtered (gdb_stdout,
+			"The macro `%s' has no definition as a C/C++"
+			" preprocessor macro at %s symbol\n"
+			"at ", macroname, symbol->name);
+      return NULL;
     }
 }
 
