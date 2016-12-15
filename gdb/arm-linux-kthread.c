@@ -105,12 +105,9 @@ arm_linuxkthread_store_registers (const struct regcache *regcache,
 {
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  CORE_ADDR sp = 0;
-  gdb_byte buf[8];
-  int i;
 
+  /* TODO */
   gdb_assert (regnum >= -1);
-
   gdb_assert (0);
 
 }
