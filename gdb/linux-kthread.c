@@ -1096,6 +1096,10 @@ lkd_proc_get_list (void)
 
   kthread_list_invalid = FALSE;
 
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
+			kthread_list_invalid);
+
   return process_list;
 }
 
@@ -1128,11 +1132,11 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 	  tp = iterate_over_threads (find_thread_swapper, (void *) &lwp);
     }
 
-  if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p\n",
-			ptid_to_str(ptid), tp);
-
   ps = (linux_kthread_info_t *)tp->priv;
+
+  if (debug_linuxkthread_threads > 2)
+    fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p ps=0x%x\n",
+			ptid_to_str(ptid), tp, tp->priv);
 
   /* Prune the gdb-thread if the process is not valid
    * meaning is was no longer found in the task list. */
@@ -1176,6 +1180,10 @@ lkd_proc_invalidate_list (void)
   iterate_over_threads (thread_clear_info, NULL);
 
   kthread_list_invalid = TRUE;
+
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
+			kthread_list_invalid);
 }
 
 void
@@ -1210,6 +1218,9 @@ linux_kthread_activate (struct objfile *objfile)
   /*debug print for existing hw threads from layer beneath */
   if (debug_linuxkthread_threads)
     {
+      fprintf_unfiltered (gdb_stdlog, "linux_kthread_active =%d\n",
+			  linux_kthread_active);
+
       fprintf_unfiltered (gdb_stdlog, "linux_kthread_activate GDB HW threads\n");
       iterate_over_threads (thread_print_info, NULL);
     }
@@ -1248,6 +1259,9 @@ linux_kthread_activate (struct objfile *objfile)
   /* scan the linux threads */
   if (!lkd_proc_refresh_info (stop_core))
     {
+      if (debug_linuxkthread_threads)
+	  fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_failed\n");
+
       /* don't activate linux-kthread as no threads were found */
       lkd_proc_invalidate_list ();
 
@@ -1280,6 +1294,11 @@ linux_kthread_close (struct target_ops *self)
 static void
 linux_kthread_deactivate (void)
 {
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_deactivate (%d)\n",
+			linux_kthread_active);
+
   /* Skip if the thread stratum has already been deactivated.  */
   if (!linux_kthread_active)
     return;
@@ -1295,6 +1314,9 @@ linux_kthread_deactivate (void)
 static void
 linux_kthread_inferior_created (struct target_ops *ops, int from_tty)
 {
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_inferior_created\n");
+
   linux_kthread_activate (NULL);
 }
 
@@ -1302,6 +1324,8 @@ static void
 linux_kthread_mourn_inferior (struct target_ops *ops)
 {
   struct target_ops *beneath = find_target_beneath (ops);
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_mourn_inferior\n");
   beneath->to_mourn_inferior (beneath);
   linux_kthread_deactivate ();
 }
