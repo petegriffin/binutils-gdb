@@ -1428,7 +1428,6 @@ linux_kthread_wait (struct target_ops *ops,
   struct target_ops *beneath = find_target_beneath (ops);
   ptid_t stop_ptid;
   CORE_ADDR pc;
-  struct regcache *regcache;
 
   if (debug_linuxkthread_targetops)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_wait\n");
@@ -1469,10 +1468,6 @@ linux_kthread_wait (struct target_ops *ops,
       below (eg. in check_exec_actions (), where we don't know
       what the user will ask in his commands. */
    set_executing (minus_one_ptid, 0);
-
-   regcache = get_thread_regcache (inferior_ptid);
-
-   pc = regcache_read_pc (regcache);
 
    if (wait_process)
      {
