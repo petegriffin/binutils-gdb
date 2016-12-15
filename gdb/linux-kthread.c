@@ -719,11 +719,11 @@ get_process_count (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   CORE_ADDR curr_addr = (CORE_ADDR) per_cpu_offset[core];
-  int proc_cnt;
+  int length =
+    TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_long);
   static int warned = 0;
+  int proc_cnt;
 
-  /* curr_addr can be null on UNI systems
-   * */
   if (HAS_ADDR (process_counts))
     curr_addr += ADDR (process_counts);
   else if (HAS_ADDR (per_cpu__process_counts))
@@ -735,19 +735,15 @@ get_process_count (int core)
       if (!warned)
 	printf_filtered ("this kernel does not support `process_counts`\n");
 
-      // if (!lkd_stepping)
-      //warned++;
-
+      warned++;
       return warned;
     }
 
-  /* TODO shouldn't hard code 4 here */
-  proc_cnt = read_memory_unsigned_integer (curr_addr, 4 /*uint32 */ ,
-					   byte_order);
+  proc_cnt = read_memory_unsigned_integer (curr_addr, length, byte_order);
 
-    if (debug_linuxkthread_threads)
-      fprintf_unfiltered (gdb_stdlog, "core(%d) curr_addr=0x%lx proc_cnt=%d\n",
-			  core, curr_addr, proc_cnt);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "core(%d) curr_addr=0x%lx proc_cnt=%d\n",
+			core, curr_addr, proc_cnt);
 
   return proc_cnt;
 };
