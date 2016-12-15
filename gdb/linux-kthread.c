@@ -1446,7 +1446,7 @@ linux_kthread_wait (struct target_ops *ops,
   }
 
   if (max_cores > 1)
-    stop_core = ptid_get_tid (stop_ptid) - 1;
+    stop_core = ptid_get_lwp (stop_ptid) - 1;
   else
     stop_core = 0;
 
