@@ -825,6 +825,17 @@ get_per_cpu_offsets(int numcores)
 			numcores);
 }
 
+/* iterate_over_threads() callback to print thread info */
+
+static int
+thread_print_info (struct thread_info *tp, void *ignored)
+{
+  fprintf_unfiltered (gdb_stdlog, "thread_info = 0x%p ptid = %s\n",
+		      tp, ptid_to_str(tp->ptid));
+  return 0;
+}
+
+
 /* Initialise and allocate memory for linux-kthread module */
 
 static void
@@ -834,6 +845,10 @@ lkthread_init (void)
   struct cleanup *cleanup;
   int size =
     TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_long);
+
+  /* Allocate private scratch buffer */
+  scratch_buf_size = 4096;
+  scratch_buf = (unsigned char *) xcalloc (scratch_buf_size, sizeof (char));
 
   /* ensure thread list from beneath target is up to date */
   cleanup = make_cleanup_restore_integer (&print_thread_events);
@@ -845,6 +860,13 @@ lkthread_init (void)
   max_cores = thread_count ();
   gdb_assert (max_cores);
 
+  if (debug_linuxkthread_threads)
+    {
+      fprintf_unfiltered (gdb_stdlog, "lkthread_init() cores(%d) GDB"
+			  "HW threads\n", max_cores);
+      iterate_over_threads (thread_print_info, NULL);
+    }
+
   /* allocate per cpu data */
   lkthread_alloc_percpu_data(max_cores);
 
@@ -852,7 +874,10 @@ lkthread_init (void)
 
   if (!lkthread_get_runqueues_addr () && (max_cores > 1))
     fprintf_unfiltered (gdb_stdlog, "Could not find the address of CPU"
-			"runqueues current context information maybe less precise\n.");
+			" runqueues current context information maybe less precise\n.");
+
+  /* invalidate the linux-kthread cached list */
+  lkthread_invalidate_list ();
 }
 
 int
@@ -1124,24 +1149,16 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 			ptid_to_str(ptid), tp, tp->priv);
 
   /* Prune the gdb-thread if the process is not valid
-   * meaning is was no longer found in the task list. */
+     meaning it was no longer found in the task list. */
   return ps;
 }
 
-/* invalidate the gdb thread is the linux ps has died.*/
+/* invalidate the gdb thread if the linux ps has died. */
+
 static int
 thread_clear_info (struct thread_info *tp, void *ignored)
 {
   tp->priv = NULL;
-  return 0;
-}
-
-/* debug function to print thread info. */
-static int
-thread_print_info (struct thread_info *tp, void *ignored)
-{
-  fprintf_unfiltered (gdb_stdlog, "thread_info = 0x%p ptid = %s\n",
-		      tp, ptid_to_str(tp->ptid));
   return 0;
 }
 
@@ -1203,17 +1220,6 @@ linux_kthread_activate (struct objfile *objfile)
   struct regcache *regcache;
   CORE_ADDR pc;
 
-  /* debug print for existing hw threads from layer beneath */
-  if (debug_linuxkthread_threads)
-    {
-      fprintf_unfiltered (gdb_stdlog, "linux_kthread_active =%d\n",
-			  linux_kthread_active);
-
-      fprintf_unfiltered (gdb_stdlog,
-			  "linux_kthread_activate GDB HW threads\n");
-      iterate_over_threads (thread_print_info, NULL);
-    }
-
   /* Skip if the thread stratum has already been activated.  */
   if (linux_kthread_active)
     return 0;
@@ -1225,32 +1231,21 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* Verify that this represents an appropriate linux target */
 
-  /* Allocate private scratch buffer */
-  scratch_buf_size = 4096;
-  scratch_buf = (unsigned char *) xcalloc (scratch_buf_size, sizeof (char));
-
-  kthread_list_invalid = TRUE;
-
-  if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
-			kthread_list_invalid);
-
-  /* check target halted at a kernel address. Using regcache_read_pc()
-     is OK here as we haven't pushed linux-kthread stratum yet */
+  /* Check target halted at a kernel address, otherwise we can't
+     access any kernel memory. Using regcache_read_pc() is OK
+     here as we haven't pushed linux-kthread stratum yet */
   regcache = get_thread_regcache (inferior_ptid);
   pc = regcache_read_pc (regcache);
   if (!arch_ops->is_kernel_address(pc))
   {
-    printf_unfiltered("linux_kthread_wait() target stopped in user space!\n");
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_activate() target"
+			"stopped in user space\n");
     return 0;
   }
 
   lkthread_init ();
 
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
-
-  /* invalidate the linux-kthread cached list */
-  lkthread_invalidate_list ();
 
   /* to get correct thread names from add_thread_with_info()
      target_ops must be pushed before enumerating kthreads */
