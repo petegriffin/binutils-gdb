@@ -51,7 +51,7 @@ int lkd_proc_refresh_info (int core);
 static linux_kthread_info_t *lkd_proc_get_list (void);
 static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
 static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
-static linux_kthread_info_t *lkd_proc_get_running (int core);
+static linux_kthread_info_t *lkthread_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
 static void lkthread_init (void);
@@ -591,20 +591,22 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
   return NULL;
 }
 
-/* Return the process currently scheduled on one core */
+/* Return the linux_kthread_info_t* for the process currently executing
+   on the core or NULL if core is invalid */
+
 linux_kthread_info_t *
-lkd_proc_get_running (int core)
+lkthread_get_running (int core)
 {
   linux_kthread_info_t *current = NULL;
   CORE_ADDR task;
-  ptid_t old_ptid;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_running core=%d\n",core);
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_running core=%d\n",core);
 
   if (core == CORE_INVAL)
     return NULL;
 
+  /* if not already obtained fetch from target */
   if (running_process[core] == NULL)
     {
 
@@ -661,7 +663,7 @@ lkd_proc_is_curr_task (linux_kthread_info_t * ps)
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_is_curr_task\n");
 
-  return (ps && (ps == lkd_proc_get_running (ps->core)));
+  return (ps && (ps == lkthread_get_running (ps->core)));
 }
 
 /*attempt getting the idle task for a core */
@@ -946,9 +948,9 @@ lkd_proc_refresh_info (int cur_core)
    * Now set the tid according to the running core,
    * */
   for (core = 0; core < max_cores; core++)
-    lkd_proc_get_running (core);
+    lkthread_get_running (core);
 
-  wait_process = lkd_proc_get_running (cur_core);
+  wait_process = lkthread_get_running (cur_core);
 
   if (!wait_process)
     return 0;
