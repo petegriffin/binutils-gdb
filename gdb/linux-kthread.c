@@ -54,7 +54,7 @@ static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkd_proc_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
-static void lkd_proc_init (void);
+static void lkthread_init (void);
 static void lkd_proc_free_list(void);
 static int lkd_proc_is_curr_task (linux_kthread_info_t * ps);
 
@@ -741,16 +741,19 @@ get_last_pid (void)
   return new_last_pid;
 };
 
-void lkd_reset_data(int numcores)
+static void
+lkthread_memset_percpu_data(int numcores)
 {
   memset (running_process, 0x0, numcores * sizeof (linux_kthread_info_t *));
   memset (rq_curr, 0x0, numcores * sizeof (CORE_ADDR));
   memset (rq_idle, 0x0, numcores * sizeof (CORE_ADDR));
-
   memset (per_cpu_offset, 0, numcores * sizeof (CORE_ADDR));
 }
 
-void lkd_allocate_cpucore_data(int numcores)
+/* Allocate memory which is dependent on number of physical CPUs */
+
+static void
+lkthread_alloc_percpu_data(int numcores)
 {
   gdb_assert (numcores >= 1);
 
@@ -762,10 +765,13 @@ void lkd_allocate_cpucore_data(int numcores)
   rq_idle = XNEWVEC (CORE_ADDR, numcores);
 
   memset (kthread_process_counts, 0, sizeof (unsigned long));
-  lkd_reset_data(numcores);
+  lkthread_memset_percpu_data(numcores);
 }
 
-void lkd_free_cpucore_data(int numcores)
+/* Free memory allocated by lkthread_alloc_percpu_data() */
+
+static void
+lkthread_free_percpu_data(int numcores)
 {
   xfree(running_process);
   xfree(kthread_process_counts);
@@ -818,8 +824,10 @@ void get_per_cpu_offsets(int numcores)
 			numcores);
 }
 
-void
-lkd_proc_init (void)
+/* Initialise and allocate memory for linux-kthread module */
+
+static void
+lkthread_init (void)
 {
   struct thread_info *th = NULL;
   struct cleanup *cleanup;
@@ -837,7 +845,7 @@ lkd_proc_init (void)
   gdb_assert (max_cores);
 
   /* allocate per cpu data */
-  lkd_allocate_cpucore_data(max_cores);
+  lkthread_alloc_percpu_data(max_cores);
 
   get_per_cpu_offsets(max_cores);
 
@@ -1235,7 +1243,7 @@ linux_kthread_activate (struct objfile *objfile)
     return 0;
   }
 
-  lkd_proc_init ();
+  lkthread_init ();
 
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
@@ -1303,7 +1311,7 @@ linux_kthread_deactivate (void)
 
   prune_threads();
 
-  lkd_free_cpucore_data(max_cores);
+  lkthread_free_percpu_data(max_cores);
 
   linux_kthread_active = 0;
 }
