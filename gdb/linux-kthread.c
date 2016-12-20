@@ -463,7 +463,7 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
       /* swapper[core] */
       gdb_assert (tid==0);
 
-      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), core_mapped, tid /* == 0*/);
+      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), core_mapped, tid);
       l_ps->gdb_thread =
 	iterate_over_threads (find_thread_swapper, &core_mapped);
     }
