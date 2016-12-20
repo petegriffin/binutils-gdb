@@ -52,7 +52,7 @@ static linux_kthread_info_t *lkd_proc_get_list (void);
 static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
 static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkd_proc_get_running (int core);
-static CORE_ADDR lkd_proc_get_runqueues (void);
+static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
 static void lkd_proc_init (void);
 static void lkd_proc_free_list(void);
@@ -539,7 +539,7 @@ lkd_proc_get_rq_curr (int core)
 
   if (!rq_curr[core])
     {
-      CORE_ADDR curr_addr = lkd_proc_get_runqueues ();
+      CORE_ADDR curr_addr = lkthread_get_runqueues_addr ();
       if (!curr_addr)
 	return 0;
       curr_addr =
@@ -552,13 +552,16 @@ lkd_proc_get_rq_curr (int core)
   return rq_curr[core];
 };
 
-CORE_ADDR
-lkd_proc_get_runqueues (void)
+/* Return the address of runqueues either from runqueues
+   symbol or more likely per_cpu__runqueues symbol. */
+
+static CORE_ADDR
+lkthread_get_runqueues_addr (void)
 {
   CORE_ADDR runqueues_addr;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_runqueues\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_runqueues_addr\n");
 
   if (HAS_ADDR (runqueues))
     {
@@ -668,7 +671,7 @@ get_rq_idle (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_func_ptr);
-  CORE_ADDR curr_addr = lkd_proc_get_runqueues ();
+  CORE_ADDR curr_addr = lkthread_get_runqueues_addr ();
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "get_rq_idle core(%d)\n", core);
@@ -839,7 +842,7 @@ lkd_proc_init (void)
 
   get_per_cpu_offsets(max_cores);
 
-  if (!lkd_proc_get_runqueues () && (max_cores > 1))
+  if (!lkthread_get_runqueues_addr () && (max_cores > 1))
     fprintf_unfiltered (gdb_stdlog, "Could not find the address of CPU"
 			"runqueues current context information maybe less precise\n.");
 }
