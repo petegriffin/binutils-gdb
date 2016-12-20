@@ -87,10 +87,10 @@ ptid_to_str (ptid_t ptid)
 static struct field_info *field_info_list;
 static struct addr_info *addr_info_list;
 
-/* Called by ADDR to fetch the address of a symbol declared using
- DECLARE_ADDR. */
+/* Helper function called by ADDR macro to fetch the address of a symbol
+   declared using DECLARE_ADDR macro */
 int
-linux_init_addr (struct addr_info *addr, int check)
+lkthread_lookup_addr (struct addr_info *addr, int check)
 {
   if (addr->bmsym.minsym)
     return 1;
@@ -119,7 +119,8 @@ linux_init_addr (struct addr_info *addr, int check)
   return 1;
 }
 
-/* Helper for linux_init_field. */
+/* Helper for lkthread_lookup_field. */
+
 static int
 find_struct_field (struct type *type, char *field, int *offset, int *size)
 {
@@ -141,58 +142,50 @@ find_struct_field (struct type *type, char *field, int *offset, int *size)
 
 /* Called by F_OFFSET or F_SIZE to compute the description of a field
  declared using DECLARE_FIELD. */
+
 int
-linux_init_field (struct field_info *field, int check)
+lkthread_lookup_field (struct field_info *f, int check)
 {
-  if (field->type != NULL)
+
+  if (f->type != NULL)
     return 1;
 
-  field->type =
-    lookup_symbol (field->struct_name, NULL, STRUCT_DOMAIN, NULL).symbol;
-  if (field->type)
-    {
-      if (debug_linuxkthread_symbols)
-	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : OK\n",
-			    field->struct_name);
-    }
-  else
-    {
-      field->type = lookup_symbol (field->struct_name,
-				   NULL, VAR_DOMAIN, NULL).symbol;
+  f->type =
+    lookup_symbol (f->struct_name, NULL, STRUCT_DOMAIN, NULL).symbol;
 
-      if (field->type
-	  && TYPE_CODE (check_typedef (SYMBOL_TYPE (field->type)))
+  if (!f->type)
+    {
+      f->type = lookup_symbol (f->struct_name, NULL, VAR_DOMAIN,
+				   NULL).symbol;
+
+      if (f->type && TYPE_CODE (check_typedef (SYMBOL_TYPE (f->type)))
 	  != TYPE_CODE_STRUCT)
-	field->type = NULL;
+	f->type = NULL;
 
-      if (field->type != NULL)
-	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : TYPEDEF\n",
-			    field->struct_name);
-      else
-	fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : NOT FOUND\n",
-			    field->struct_name);
     }
 
-  if (field->type == NULL
-      || !find_struct_field (check_typedef (SYMBOL_TYPE (field->type)),
-			     field->field_name, &field->offset, &field->size))
+  if (f->type == NULL
+      || !find_struct_field (check_typedef (SYMBOL_TYPE (f->type)),
+			     f->field_name, &f->offset, &f->size))
     {
-      field->type = NULL;
+      f->type = NULL;
       if (!check)
-	error ("No such field %s::%s\n", field->struct_name,
-	       field->field_name);
+	error ("No such field %s::%s\n", f->struct_name, f->field_name);
 
       return 0;
     }
 
   /* Chain initialized entries for cleanup. */
-  field->next = field_info_list;
-  field_info_list = field;
+  f->next = field_info_list;
+  field_info_list = f;
 
   if (debug_linuxkthread_symbols)
-    fprintf_unfiltered (gdb_stdlog, "%s::%s => offset %i  size %i\n"
-			, field->struct_name, field->field_name,
-			field->offset, field->size);
+    {
+      fprintf_unfiltered (gdb_stdlog, "Checking for 'struct %s' : OK\n",
+			  f->struct_name);
+      fprintf_unfiltered (gdb_stdlog, "%s::%s => offset %i  size %i\n",
+			  f->struct_name, f->field_name, f->offset, f->size);
+    }
   return 1;
 }
 
