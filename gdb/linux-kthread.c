@@ -319,9 +319,6 @@ linux_kthread_info_t *process_list = NULL;
 /* the process we stopped at in target_wait */
 linux_kthread_info_t *wait_process = NULL;
 
-/* per cpu peeks */
-CORE_ADDR runqueues_addr;
-
 /*__per_cpu_offset*/
 CORE_ADDR *per_cpu_offset;
 
@@ -554,16 +551,10 @@ lkd_proc_get_rq_curr (int core)
 CORE_ADDR
 lkd_proc_get_runqueues (void)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
-  int length =
-    TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_int);
-  CORE_ADDR swapper = 0;
-  linux_kthread_info_t *test_ps;
+  CORE_ADDR runqueues_addr;
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_runqueues\n");
-
-  runqueues_addr = 0;
 
   if (HAS_ADDR (runqueues))
     {
@@ -572,28 +563,6 @@ lkd_proc_get_runqueues (void)
   else
     {
       runqueues_addr = ADDR (per_cpu__runqueues);
-    }
-  /* check validity */
-
-  if (debug_linuxkthread_threads)
-    {
-      if (HAS_FIELD (raw_spinlock, magic))
-	{
-
-	  //TODO http://lxr.free-electrons.com/source/include/linux/spinlock_types.h?v=3.14#L32
-
-	  CORE_ADDR lock_magic = ADDR (runqueues)
-	    + (CORE_ADDR) per_cpu_offset[0]
-	    + F_OFFSET (rq, lock) + F_OFFSET (raw_spinlock,
-					      magic);
-
-	  if ((read_memory_unsigned_integer (lock_magic, length,
-					     byte_order) & 0xdead0000)
-	      != 0xdead0000)
-	    error ("accessing the core runqueues seems to be compromised.");
-	}
-      else
-	printf_filtered ("runqueues access validated OK.\n");
     }
 
   return runqueues_addr;
