@@ -221,9 +221,13 @@ fields_and_addrs_clear (void)
     }
 }
 
-/* this function checks a macro definition at a particular symbol
-   returns the replacement string or NULL if not found */
-const char * kthread_find_macro_at_symbol(struct addr_info *symbol, char *macroname)
+/* This function checks for a macro definition at a particular symbol
+   PC location and returns the replacement string or NULL if not found.
+   It is used to allow linux-kthread debugger to hook on a kernel symbol
+   and find out a macro definition e.g. PAGE_OFFSET if the kernel has
+   been compiled with -g3  */
+const char * kthread_find_macro_at_symbol(struct addr_info *symbol,
+					  char *macroname)
 {
   struct symtab_and_line sal;
   struct macro_scope *ms = NULL;
