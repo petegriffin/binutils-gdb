@@ -1532,7 +1532,8 @@ linux_kthread_update_thread_list (struct target_ops *ops)
   prune_threads ();
 }
 
-/* Return a string describing the state of the thread specified by
+/* The linux-kthread to_extra_thread_info target_ops method.
+   Return a string describing the state of the thread specified by
    INFO.  */
 
 static char *
@@ -1542,7 +1543,7 @@ linux_kthread_extra_thread_info (struct target_ops *self,
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   linux_kthread_info_t *ps = (linux_kthread_info_t *) info->priv;
 
-  if (ps /* && check_ps_magic */)
+  if (ps)
     {
       char *msg = get_print_cell ();
       size_t len = 0;
@@ -1550,7 +1551,11 @@ linux_kthread_extra_thread_info (struct target_ops *self,
       len = snprintf (msg, PRINT_CELL_SIZE, "pid: %li tgid: %i",
 		      ptid_get_tid(PTID_OF (ps)), ps->tgid);
 
-      /* yao: don't do anything special this could come from xml threads.dtd */
+      /* Now GDB is displaying all kernel threads it is important
+	 to let the user know which threads are actually scheduled
+	 on the CPU cores. We do this by adding <C core_num> to the
+	 thread name if it is currently executing on the processor
+	 when the target was halted */
 
       if (lkd_proc_is_curr_task (ps))
 	snprintf (msg + len, PRINT_CELL_SIZE - len, " <C%u>", ps->core);
