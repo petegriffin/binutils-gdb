@@ -1165,7 +1165,6 @@ lkd_proc_free_list (void)
     {
       cur = ps;
       ps = ps->next;
-      // xfree does check for null pointers.
       xfree (cur->comm);
       xfree (cur);
     }
