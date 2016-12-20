@@ -1203,13 +1203,14 @@ linux_kthread_activate (struct objfile *objfile)
   struct regcache *regcache;
   CORE_ADDR pc;
 
-  /*debug print for existing hw threads from layer beneath */
+  /* debug print for existing hw threads from layer beneath */
   if (debug_linuxkthread_threads)
     {
       fprintf_unfiltered (gdb_stdlog, "linux_kthread_active =%d\n",
 			  linux_kthread_active);
 
-      fprintf_unfiltered (gdb_stdlog, "linux_kthread_activate GDB HW threads\n");
+      fprintf_unfiltered (gdb_stdlog,
+			  "linux_kthread_activate GDB HW threads\n");
       iterate_over_threads (thread_print_info, NULL);
     }
 
@@ -1234,13 +1235,13 @@ linux_kthread_activate (struct objfile *objfile)
     fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
 			kthread_list_invalid);
 
-  /* check program counter is a kernel address. Using regcache_read_pc()
-     is OK here as we haven't pushed are stratum yet */
+  /* check target halted at a kernel address. Using regcache_read_pc()
+     is OK here as we haven't pushed linux-kthread stratum yet */
   regcache = get_thread_regcache (inferior_ptid);
   pc = regcache_read_pc (regcache);
   if (!arch_ops->is_kernel_address(pc))
   {
-    printf_unfiltered("linux_kthread_wait() target stopped in user space!!\n");
+    printf_unfiltered("linux_kthread_wait() target stopped in user space!\n");
     return 0;
   }
 
@@ -1248,6 +1249,7 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
+  /* invalidate the linux-kthread cached list */
   lkthread_invalidate_list ();
 
   /* to get correct thread names from add_thread_with_info()
