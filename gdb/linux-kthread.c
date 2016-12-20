@@ -793,29 +793,29 @@ void get_per_cpu_offsets(int numcores)
     //asm-generic/percpu.h
     //extern unsigned long __per_cpu_offset[NR_CPUS];
 
-    for (core=0; core < numcores; core++)
-      {
-	if (!per_cpu_offset[core])
-	  per_cpu_offset[core] = read_memory_unsigned_integer (curr_addr,
-							       length,
-							       byte_order);
+  for (core=0; core < numcores; core++)
+    {
+      if (!per_cpu_offset[core])
+	per_cpu_offset[core] = read_memory_unsigned_integer (curr_addr,
+							     length,
+							     byte_order);
 
-	curr_addr += (CORE_ADDR) length;
+      curr_addr += (CORE_ADDR) length;
 
-	if (!per_cpu_offset[core])
-	  {
-	    warning ("Suspicious null per-cpu offsets,"
-		     " or wrong number of detected cores:\n"
-		     "ADDR (__per_cpu_offset) = %s\nmax_cores = %d",
-		     phex (ADDR (__per_cpu_offset),4), max_cores);
+      if (!per_cpu_offset[core])
+	{
+	  warning ("Suspicious null per-cpu offsets,"
+		   " or wrong number of detected cores:\n"
+		   "ADDR (__per_cpu_offset) = %s\nmax_cores = %d",
+		   phex (ADDR (__per_cpu_offset),4), max_cores);
 
-	    break;
-	  }
-      }
+	  break;
+	}
+    }
 
-    if (debug_linuxkthread_threads)
-      fprintf_unfiltered (gdb_stdlog, "SMP kernel. %d cores detected\n",
-			  numcores);
+  if (debug_linuxkthread_threads)
+    fprintf_unfiltered (gdb_stdlog, "SMP kernel. %d cores detected\n",
+			numcores);
 }
 
 void
