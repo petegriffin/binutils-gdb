@@ -591,7 +591,6 @@ lkd_proc_get_running (int core)
 {
   linux_kthread_info_t *current = NULL;
   CORE_ADDR task;
-  struct thread_info *tp;	/*gdb ti */
   ptid_t old_ptid;
 
   if (debug_linuxkthread_threads)
@@ -603,12 +602,13 @@ lkd_proc_get_running (int core)
   if (running_process[core] == NULL)
     {
 
-      gdb_assert (lkd_proc_get_runqueues ());
+      gdb_assert (lkthread_get_runqueues_addr ());
 
       task = lkd_proc_get_rq_curr (core);
 
       if (task)
-	{			/* smp cpu is initialized */
+	{
+	  /* smp cpu is initialized */
 	  current = lkd_proc_get_by_task_struct (task);
 
 	  if (!current)
@@ -637,8 +637,8 @@ lkd_proc_get_running (int core)
 	  current->core = core;	/* was CORE_INVAL */
 	  running_process[core] = current;
 
-	}			// task
-    }				// running_process[core]
+	}
+    }
 
     if (debug_linuxkthread_threads)
       fprintf_unfiltered (gdb_stdlog, "running ps[%d]: comm = %s ptid=%s\n",
