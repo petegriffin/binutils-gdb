@@ -211,7 +211,8 @@ extern void linux_kthread_set_collect_thread (struct gdbarch *gdbarch,
 			     void (*collect_kthread) (const struct regcache *,
 						      int, CORE_ADDR));
 
-/* Return the macro replacement string for a given macro at a particular symbol */
+/* Return the macro replacement string for a given macro at a particular
+   symbol location */
 const char * kthread_find_macro_at_symbol(struct addr_info *symbol, char *name);
 
 
