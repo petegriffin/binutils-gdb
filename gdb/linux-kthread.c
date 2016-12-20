@@ -329,6 +329,8 @@ static unsigned long *kthread_process_counts;
 
 static int last_pid;
 
+/* iterate_over_threads() callback */
+
 static int
 find_thread_tid (struct thread_info *tp, void *arg)
 {
@@ -336,6 +338,8 @@ find_thread_tid (struct thread_info *tp, void *arg)
 
   return (ptid_get_tid(tp->ptid) == tid);
 }
+
+/* iterate_over_threads() callback */
 
 static int
 find_thread_swapper (struct thread_info *tp, void *arg)
@@ -355,6 +359,7 @@ find_thread_swapper (struct thread_info *tp, void *arg)
 }
 
 /* invalidate the cached task list. */
+
 static void
 proc_private_dtor (struct private_thread_info * dummy)
 {
@@ -363,6 +368,7 @@ proc_private_dtor (struct private_thread_info * dummy)
 
 /* Create the 'linux_kthread_info_t' for the task pointed by the passed
  TASK_STRUCT. */
+
 static void
 get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 	       int core /*zero-based */ )
@@ -513,7 +519,7 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
   l_ps->old_ptid = PTID_OF (l_ps);
 }
 
-/*attempt getting the runqueue address for a core
+/* attempt getting the runqueue address for a core
 
 See struct rq here
 http://lxr.free-electrons.com/source/kernel/sched/sched.h?v=3.14#L524
@@ -774,7 +780,8 @@ lkthread_free_percpu_data(int numcores)
   xfree(rq_idle);
 }
 
-void get_per_cpu_offsets(int numcores)
+void
+get_per_cpu_offsets(int numcores)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_data_ptr);
@@ -1166,7 +1173,7 @@ lkthread_invalidate_list (void)
 			kthread_list_invalid);
 }
 
-void
+static void
 lkd_proc_free_list (void)
 {
   linux_kthread_info_t *ps = process_list;
