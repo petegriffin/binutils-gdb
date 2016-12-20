@@ -1105,7 +1105,7 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
   ps = (linux_kthread_info_t *)tp->priv;
 
   if (debug_linuxkthread_threads > 2)
-    fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p ps=0x%x\n",
+    fprintf_unfiltered (gdb_stdlog, "ptid %s tp=0x%p ps=0x%p\n",
 			ptid_to_str(ptid), tp, tp->priv);
 
   /* Prune the gdb-thread if the process is not valid
