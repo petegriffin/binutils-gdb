@@ -1287,7 +1287,7 @@ linux_kthread_close (struct target_ops *self)
   fields_and_addrs_clear ();
 }
 
-/* Deactivate the thread stratum implemented by this module.  */
+/* Deactivate the linux-kthread stratum implemented by this module.  */
 
 static void
 linux_kthread_deactivate (void)
@@ -1490,6 +1490,8 @@ linux_kthread_wait (struct target_ops *ops,
   return stop_ptid;
 }
 
+/* The linux-kthread to_resume target_ops method */
+
 static void
 linux_kthread_resume (struct target_ops *ops,
 		      ptid_t ptid, int step, enum gdb_signal sig)
@@ -1503,6 +1505,8 @@ linux_kthread_resume (struct target_ops *ops,
 
   beneath->to_resume (beneath, ptid, step, sig);
 }
+
+/* The linux-kthread to_thread_alive target_ops method */
 
 static int
 linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
@@ -1530,6 +1534,8 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
 
   return 1;
 }
+
+/* The linux-kthread to_update_thread_list target_ops method */
 
 static void
 linux_kthread_update_thread_list (struct target_ops *ops)
@@ -1579,6 +1585,8 @@ linux_kthread_extra_thread_info (struct target_ops *self,
   return "LinuxThread";
 }
 
+/* The linux-kthread to_pid_to_str target_ops method. */
+
 static char *
 linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
 {
@@ -1607,6 +1615,8 @@ linux_kthread_pid_to_str (struct target_ops *ops, ptid_t ptid)
 
   return ps->comm;
 }
+
+/* The linux-kthread to_thread_name target_ops method. */
 
 static const char *
 linux_kthread_thread_name (struct target_ops *ops, struct thread_info *thread)
