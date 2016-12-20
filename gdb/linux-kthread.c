@@ -317,13 +317,12 @@ DECLARE_ADDR (runqueues);
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
 int max_cores = CORE_INVAL;
 
-/* The current task. */
 /* the processes list from Linux perspective */
 linux_kthread_info_t *process_list = NULL;
 /* the process we stopped at in target_wait */
 linux_kthread_info_t *wait_process = NULL;
 
-/*__per_cpu_offset*/
+/* __per_cpu_offset */
 CORE_ADDR *per_cpu_offset;
 
 /* array of cur_rq(cpu) on each cpu */
