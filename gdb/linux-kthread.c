@@ -664,7 +664,8 @@ lkd_proc_is_curr_task (linux_kthread_info_t * ps)
   return (ps && (ps == lkd_proc_get_running (ps->core)));
 }
 
-/*attempt getting the idle task for a core*/
+/*attempt getting the idle task for a core */
+
 static CORE_ADDR
 get_rq_idle (int core)
 {
@@ -687,7 +688,7 @@ get_rq_idle (int core)
     }
 
   return rq_idle[core];
-};
+}
 
 static int
 get_process_count (int core)
