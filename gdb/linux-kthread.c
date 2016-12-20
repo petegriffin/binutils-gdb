@@ -45,7 +45,7 @@ static int debug_linuxkthread_threads=0;
 static int debug_linuxkthread_symbols=0;
 
 /* Forward declarations */
-void lkd_proc_invalidate_list (void);
+void lkthread_invalidate_list (void);
 int lkd_proc_refresh_info (int core);
 
 static linux_kthread_info_t *lkd_proc_get_list (void);
@@ -888,7 +888,7 @@ lkd_proc_refresh_info (int cur_core)
     }
 
   if (do_invalidate)
-      lkd_proc_invalidate_list ();
+      lkthread_invalidate_list ();
 
   /* Update the process_list now, so that init_task is in there. */
   (void) lkd_proc_get_list ();
@@ -1137,8 +1137,9 @@ thread_print_info (struct thread_info *tp, void *ignored)
 }
 
 /* invalidate the cached task list. */
+
 void
-lkd_proc_invalidate_list (void)
+lkthread_invalidate_list (void)
 {
   linux_kthread_info_t *ps = process_list;
   linux_kthread_info_t *cur;
@@ -1153,6 +1154,7 @@ lkd_proc_invalidate_list (void)
   /* We invalidate the processes attached to the gdb_thread
   * setting tp->private to null tells if the thread can
   * be deleted or not. */
+
   iterate_over_threads (thread_clear_info, NULL);
 
   kthread_list_invalid = TRUE;
@@ -1237,7 +1239,7 @@ linux_kthread_activate (struct objfile *objfile)
 
   /* TODO: check kernel in memory matches vmlinux (Linux banner etc?) */
 
-  lkd_proc_invalidate_list ();
+  lkthread_invalidate_list ();
 
   /* to get correct thread names from add_thread_with_info()
      target_ops must be pushed before enumerating kthreads */
@@ -1252,7 +1254,7 @@ linux_kthread_activate (struct objfile *objfile)
 	  fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_failed\n");
 
       /* don't activate linux-kthread as no threads were found */
-      lkd_proc_invalidate_list ();
+      lkthread_invalidate_list ();
 
       prune_threads();
       return 0;
@@ -1290,7 +1292,7 @@ linux_kthread_deactivate (void)
 
   wait_process = NULL;
 
-  lkd_proc_invalidate_list();
+  lkthread_invalidate_list();
 
   lkd_proc_free_list ();
 
