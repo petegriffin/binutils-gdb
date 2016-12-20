@@ -1412,6 +1412,8 @@ static CORE_ADDR lkthread_get_pc(struct target_ops *ops)
   return pc;
 }
 
+/* The linux-kthread to_wait target_ops method */
+
 static ptid_t
 linux_kthread_wait (struct target_ops *ops,
 		    ptid_t ptid, struct target_waitstatus *status,
@@ -1429,11 +1431,14 @@ linux_kthread_wait (struct target_ops *ops,
   /* Pass the request to the layer beneath.  */
   stop_ptid = beneath->to_wait (beneath, ptid, status, options);
 
+  /* get PC of CPU */
   pc = lkthread_get_pc(ops);
 
+  /* check it is executing in the kernel before accessing kernel memory */
   if (!arch_ops->is_kernel_address(pc))
   {
-    fprintf_unfiltered (gdb_stdlog, "linux_kthread_wait() target stopped in user space\n");
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_wait() target stopped"
+			" in user space. Disabling linux-kthread\n");
     linux_kthread_deactivate();
     return stop_ptid;
   }
