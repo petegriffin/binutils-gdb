@@ -1632,11 +1632,15 @@ linux_kthread_thread_name (struct target_ops *ops, struct thread_info *thread)
   return NULL;
 }
 
+/* The linux-kthread to_can_async_p target_ops method. */
+
 static int
 linux_kthread_can_async_p (struct target_ops *ops)
 {
   return 0;
 }
+
+/* The linux-kthread is_async_p target_ops method. */
 
 static int
 linux_kthread_is_async_p (struct target_ops *ops)
@@ -1678,6 +1682,7 @@ linux_kthread_target (void)
    * when connecting to an async target such as QEmu
    */
 
+  /* Prevent async operations */
   t->to_can_async_p = linux_kthread_can_async_p;
   t->to_is_async_p = linux_kthread_is_async_p;
 
