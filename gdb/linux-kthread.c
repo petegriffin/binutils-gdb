@@ -1316,6 +1316,8 @@ linux_kthread_inferior_created (struct target_ops *ops, int from_tty)
   linux_kthread_activate (NULL);
 }
 
+/* The linux-kthread to_mourn_inferior target_ops method */
+
 static void
 linux_kthread_mourn_inferior (struct target_ops *ops)
 {
@@ -1325,6 +1327,13 @@ linux_kthread_mourn_inferior (struct target_ops *ops)
   beneath->to_mourn_inferior (beneath);
   linux_kthread_deactivate ();
 }
+
+/* The linux-kthread to_fetch_registers target_ops method.
+   This function determines whether the thread is running on
+   a physical CPU in which cases it defers to the layer beneath
+   to populate the register cache or if it is a sleeping
+   descheduled thread it uses the arch_ops to populate the registers
+   from what the kernel saved on the stack.  */
 
 static void
 linux_kthread_fetch_registers (struct target_ops *ops,
@@ -1346,6 +1355,12 @@ linux_kthread_fetch_registers (struct target_ops *ops,
   /* Call the platform specific code */
   arch_ops->to_fetch_registers(regcache, regnum, ps->task_struct);
 }
+
+/* The linux-kthread to_store_registers target_ops method.
+   This function determines whether the thread is running on
+   a physical CPU in which cases it defers to the layer beneath
+   or uses the arch_ops callback to write the registers into
+   the stack of the sleeping thread.  */
 
 static void
 linux_kthread_store_registers (struct target_ops *ops,
