@@ -205,8 +205,8 @@ struct linux_kthread_arch_ops
    architecture GDBARCH to SUPPLY_KTHREAD.  */
 
 extern void linux_kthread_set_supply_thread (struct gdbarch *gdbarch,
-				    void (*supply_kthread) (struct regcache *,
-							    int, CORE_ADDR));
+				void (*supply_kthread) (struct regcache *,
+							int, CORE_ADDR));
 
 
 /* Set the function that collects registers for an inactive thread for
