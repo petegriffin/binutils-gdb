@@ -219,8 +219,9 @@ fields_and_addrs_clear (void)
    It is used to allow linux-kthread debugger to hook on a kernel symbol
    and find out a macro definition e.g. PAGE_OFFSET if the kernel has
    been compiled with -g3  */
-const char * kthread_find_macro_at_symbol(struct addr_info *symbol,
-					  char *macroname)
+
+const char *
+kthread_find_macro_at_symbol(struct addr_info *symbol, char *macroname)
 {
   struct symtab_and_line sal;
   struct macro_scope *ms = NULL;
