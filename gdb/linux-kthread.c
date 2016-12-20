@@ -1380,11 +1380,16 @@ linux_kthread_store_registers (struct target_ops *ops,
   arch_ops->to_store_registers(regcache, regnum, ps->task_struct);
 }
 
-/* Use layer beneath to get the physical CPU PC register. We can't use
-regcache_read_pc() as it can vector through linux_kthread_fetch_registers which
-itself needs to read kernel memory to determine whether to use the layer
-beneath or not (see above) */
-CORE_ADDR linux_kthread_get_pc(struct target_ops *ops)
+/* Helper function to always use layer beneath to fetch PC.
+   Parts of linux-kthread can't use regcache_read_pc() API to determine
+   the PC as it vectors through  linux_kthread_fetch_registers()
+   which itself needs to read kernel memory to determine whether
+   the thread is sleeping or not. This function is used to help
+   determine whether the target stopped in userspace and therefore
+   linux-kthread can no longer read kernel memory or display
+   kernel threads.  */
+
+static CORE_ADDR lkthread_get_pc(struct target_ops *ops)
 {
   struct gdbarch *gdbarch = target_gdbarch ();
   struct target_ops *beneath = find_target_beneath (ops);
@@ -1393,7 +1398,7 @@ CORE_ADDR linux_kthread_get_pc(struct target_ops *ops)
   int regnum;
 
   if (debug_linuxkthread_targetops)
-    fprintf_unfiltered (gdb_stdlog, "linux-kthread_get_pc\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_pc\n");
 
   regcache = get_thread_regcache (inferior_ptid);
   regnum = gdbarch_pc_regnum (gdbarch);
@@ -1424,7 +1429,7 @@ linux_kthread_wait (struct target_ops *ops,
   /* Pass the request to the layer beneath.  */
   stop_ptid = beneath->to_wait (beneath, ptid, status, options);
 
-  pc = linux_kthread_get_pc(ops);
+  pc = lkthread_get_pc(ops);
 
   if (!arch_ops->is_kernel_address(pc))
   {
