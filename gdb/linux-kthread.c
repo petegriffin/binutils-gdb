@@ -51,7 +51,7 @@ static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
 static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkthread_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
-static CORE_ADDR lkd_proc_get_rq_curr (int core);
+static CORE_ADDR lkthread_get_rq_curr_addr (int core);
 static void lkthread_init (void);
 static void lkd_proc_free_list(void);
 static void lkthread_invalidate_list (void);
@@ -540,37 +540,37 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
   l_ps->old_ptid = PTID_OF (l_ps);
 }
 
-/* attempt getting the runqueue address for a core
+/* Get the rq->curr task_struct address from the runqueue of the requested
+   CPU core. Function returns a cached copy if already obtained from target
+   memory. If no cached address is available it fetches from the target
+   memory.  */
 
-See struct rq here
-http://lxr.free-electrons.com/source/kernel/sched/sched.h?v=3.14#L524
-
-*/
 CORE_ADDR
-lkd_proc_get_rq_curr (int core)
+lkthread_get_rq_curr_addr (int cpucore)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   int length =
     TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_data_ptr);
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr core(%d)\n", core);
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_rq_curr_addr core(%d)\n",
+			cpucore);
 
-  if (!lkthread_h->rq_curr[core])
+  /* If not already cached read from target.  */
+  if (!lkthread_h->rq_curr[cpucore])
     {
       CORE_ADDR curr_addr = lkthread_get_runqueues_addr ();
       if (!curr_addr)
 	return 0;
 
-      curr_addr = curr_addr + (CORE_ADDR) lkthread_h->per_cpu_offset[core] +
+      curr_addr = curr_addr + (CORE_ADDR) lkthread_h->per_cpu_offset[cpucore] +
 	F_OFFSET (rq, curr);
 
-      lkthread_h->rq_curr[core] = read_memory_unsigned_integer (curr_addr,
-								length,
-								byte_order);
+      lkthread_h->rq_curr[cpucore] =
+	read_memory_unsigned_integer (curr_addr, length, byte_order);
     }
 
-  return lkthread_h->rq_curr[core];
+  return lkthread_h->rq_curr[cpucore];
 }
 
 /* Return the address of runqueues either from runqueues
@@ -614,14 +614,14 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
 }
 
 /* Return the linux_kthread_info_t* for the process currently executing
-   on the core or NULL if core is invalid */
+   on the CPU core or NULL if CPU core is invalid.  */
 
 linux_kthread_info_t *
 lkthread_get_running (int core)
 {
   linux_kthread_info_t **running_ps = lkthread_h->running_process;
   linux_kthread_info_t *current = NULL;
-  CORE_ADDR task;
+  CORE_ADDR rq_curr_taskstruct;
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkthread_get_running core=%d\n",core);
@@ -629,18 +629,20 @@ lkthread_get_running (int core)
   if (core == CORE_INVAL)
     return NULL;
 
-  /* if not already obtained fetch from target */
+  /* If not already cached, read from target.  */
   if (running_ps[core] == NULL)
     {
 
+      /* Ensure we have a runqueues address */
       gdb_assert (lkthread_get_runqueues_addr ());
 
-      task = lkd_proc_get_rq_curr (core);
+      /* Get rq->curr task_struct address for CPU core.  */
+      rq_curr_taskstruct = lkthread_get_rq_curr_addr (core);
 
-      if (task)
+      if (rq_curr_taskstruct)
 	{
 	  /* smp cpu is initialized */
-	  current = lkd_proc_get_by_task_struct (task);
+	  current = lkd_proc_get_by_task_struct (rq_curr_taskstruct);
 
 	  if (!current)
 	    {
@@ -655,7 +657,7 @@ lkthread_get_running (int core)
 
 	      gdb_assert(current);
 
-	      current->task_struct = task;
+	      current->task_struct = rq_curr_taskstruct;
 	    }
 	  else
 	    {
