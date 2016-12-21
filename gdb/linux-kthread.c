@@ -46,9 +46,9 @@ static int debug_linuxkthread_symbols=0;
 
 /* Forward declarations */
 
-static linux_kthread_info_t *lkd_proc_get_list (void);
+static linux_kthread_info_t *lkthread_get_list (void);
 static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
-static linux_kthread_info_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
+static linux_kthread_info_t *lkthread_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkthread_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkthread_get_rq_curr_addr (int core);
@@ -377,20 +377,19 @@ find_thread_swapper (struct thread_info *tp, void *arg)
   return 0;
 }
 
-/* invalidate the cached task list. */
-
 static void
 proc_private_dtor (struct private_thread_info * dummy)
 {
 	/* nop, do not free. */
 }
 
-/* Create the 'linux_kthread_info_t' for the task pointed by the passed
- TASK_STRUCT. */
+/* Creates the 'linux_kthread_info_t' for the task pointed to by the passed
+   task_struct address by reading from the targets memory. If task_struct
+   is zero it creates placeholder swapper entry.  */
 
 static void
-get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
-	       int core /*zero-based */ )
+lkthread_get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
+			int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   linux_kthread_info_t *l_ps;
@@ -410,13 +409,14 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 
   if (task_struct == 0)
     {
+      /* Create swapper entry.  */
 
       if (debug_linuxkthread_threads)
 	fprintf_unfiltered (gdb_stdlog, "Creating swapper for core %d ps=%p\n",
 			    core, l_ps);
-      /* create a fake swapper entry now for the additional core
-       * to keep the gdb_thread ordering
-       **/
+
+      /* Create a fake swapper entry now for the additional core
+	 to keep the gdb_thread ordering.  */
       l_ps->task_struct = 0;
       l_ps->mm = 0;
       l_ps->tgid = 0;
@@ -432,19 +432,20 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
     }
   else
     {
+      /* Populate linux_kthread_info_t entry by reading from
+	 task_struct target memory.  */
       size = F_OFFSET (task_struct, comm) + F_SIZE (task_struct, comm);
 
       task_name = lkthread_h->scratch_buf + F_OFFSET (task_struct, comm);
 
-      /* use scratch area for messing around with strings
-       * to avoid static arrays and dispersed mallocs and frees
-       **/
+      /* Use scratch area for messing around with strings
+	 to avoid static arrays and dispersed mallocs and frees.  */
       gdb_assert (lkthread_h->scratch_buf);
       gdb_assert (lkthread_h->scratch_buf_size >= size);
 
-      /* the task struct is not likely to change much from one kernel version
-       * to another. Knowing that comm is one of the far fields,
-       * try read the task struct in one command */
+      /* The task_struct is not likely to change much from one kernel version
+	 to another. Knowing that comm is one of the far fields,
+	 try reading the task_struct in one go.  */
       read_memory (task_struct, lkthread_h->scratch_buf, size);
 
       l_ps->task_struct = task_struct;
@@ -459,9 +460,10 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 					   task_struct, tgid, byte_order);
       l_ps->prio = extract_unsigned_field (lkthread_h->scratch_buf,
 					   task_struct, prio, byte_order);
-      l_ps->core = core;	/* for to_core_of_threads */
+      /* For to_core_of_threads.  */
+      l_ps->core = core;
 
-      /* add square brackets to name for kernel threads */
+      /* Add square brackets to name for kernel threads.  */
       if (!l_ps->mm)
 	{
 	  int len = strlen ((char *)task_name);
@@ -480,10 +482,10 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 
   if (core != CORE_INVAL)
     {
-      /* Long usage to map to LWP */
+      /* Long usage to map to LWP.  */
       long core_mapped = core + 1;
 
-      /* swapper[core] */
+      /* swapper[core].  */
       gdb_assert (tid==0);
 
       this_ptid = ptid_build (ptid_get_pid(inferior_ptid), core_mapped, tid);
@@ -492,14 +494,14 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
     }
   else
     {
-      /* lwp is now cpu core for everything, tid is linux
-	 pid this matches gdbremote usage */
+      /* lwp stores CPU core, tid stores linux
+	 pid this matches gdbremote usage.  */
 
       this_ptid = ptid_build (ptid_get_pid(inferior_ptid), CORE_INVAL, tid);
 
       l_ps->gdb_thread = iterate_over_threads (find_thread_tid, &tid);
 
-      /*reset the thread core value, if existing */
+      /* Reset the thread core value, if existing.  */
       if (l_ps->gdb_thread)
 	{
 	  gdb_assert (!l_ps->gdb_thread->priv);
@@ -507,23 +509,23 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
 	}
     }
 
+  /* Flag the new entry as valid.  */
   l_ps->valid = 1;
 
-  /* allocate if not found
-   */
+  /* Add new GDB thread if not found.  */
   if (!l_ps->gdb_thread)
    {
      if (debug_linuxkthread_threads)
-       fprintf_unfiltered (gdb_stdlog, "allocate a new thread\n");
+       fprintf_unfiltered (gdb_stdlog, "allocate a new GDB thread\n");
 
-      /* add with info so that pid_to_string works. */
+      /* Add with info so that pid_to_string works.  */
       l_ps->gdb_thread =  add_thread_with_info (this_ptid,
 				(struct private_thread_info *)l_ps);
     }
 
-  /* forcibly update the private fields, as some thread may
-   * already have been created without, like hw threads.
-   * and this also tell is the gdb_thread is pruned or not!*/
+  /* Forcibly update the private field, as some threads (like hw threads)
+     have already have been created without. This also indicates whether
+     the gdb_thread needs to be pruned or not.  */
 
   l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
 
@@ -531,19 +533,19 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
       fprintf_unfiltered (gdb_stdlog, "ps: comm = %s ptid=%s\n"
 			  ,l_ps->comm, ptid_to_str(PTID_OF (l_ps)));
 
-  /* the process list freeing is not handled thanks to
-   * this `private` facility, yet.
-   */
+  /* The process list freeing is not handled thanks to
+     this `private` facility, yet.  */
+
   l_ps->gdb_thread->private_dtor = proc_private_dtor;
 
-  /* keep trace of the last state to notify a change */
+  /* Keep trace of the last state to notify a change.  */
   l_ps->old_ptid = PTID_OF (l_ps);
 }
 
 /* Get the rq->curr task_struct address from the runqueue of the requested
-   CPU core. Function returns a cached copy if already obtained from target
-   memory. If no cached address is available it fetches from the target
-   memory.  */
+   CPU core. Function returns a cached copy if already obtained from
+   target memory. If no cached address is available it fetches it from
+   target memory.  */
 
 CORE_ADDR
 lkthread_get_rq_curr_addr (int cpucore)
@@ -596,12 +598,13 @@ lkthread_get_runqueues_addr (void)
   return runqueues_addr;
 }
 
-/* Returns the 'linux_kthread_info_t' corresponding to the passed task_struct or
- NULL if not in the list. */
+/* Returns the 'linux_kthread_info_t' corresponding to the passed task_struct
+   address or NULL if not in the list.  */
+
 linux_kthread_info_t *
-lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
+lkthread_get_by_task_struct (CORE_ADDR task_struct)
 {
-  linux_kthread_info_t *ps = lkd_proc_get_list ();
+  linux_kthread_info_t *ps = lkthread_get_list ();
 
   while ((ps != NULL) && (ps->valid == 1))
     {
@@ -633,7 +636,7 @@ lkthread_get_running (int core)
   if (running_ps[core] == NULL)
     {
 
-      /* Ensure we have a runqueues address */
+      /* Ensure we have a runqueues address.  */
       gdb_assert (lkthread_get_runqueues_addr ());
 
       /* Get rq->curr task_struct address for CPU core.  */
@@ -641,15 +644,14 @@ lkthread_get_running (int core)
 
       if (rq_curr_taskstruct)
 	{
-	  /* smp cpu is initialized */
-	  current = lkd_proc_get_by_task_struct (rq_curr_taskstruct);
+	  /* smp cpu is initialized.  */
+	  current = lkthread_get_by_task_struct (rq_curr_taskstruct);
 
 	  if (!current)
 	    {
 	      /* this task struct is not known yet AND was not seen
-	       * while running down the tasks lists, so this is presumably
-	       * the swapper of an secondary SMP core.
-	       */
+		 while running down the tasks lists, so this is presumably
+		 the swapper of an secondary SMP core.  */
 
 	      current =
 		lkd_proc_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid),
@@ -661,13 +663,13 @@ lkthread_get_running (int core)
 	    }
 	  else
 	    {
-	      /* update the thread's lwp in thread_list if it exists and wasn't
-	       * scheduled so that tid makes sense for both the gdbserver and
-	       * infrun.c */
+	      /* Update the thread's lwp in thread_list if it exists and
+		 wasn't scheduled so that tid makes sense for both the
+		 gdbserver and infrun.c.  */
 	      PTID_OF (current).lwp = core + 1;
 	    }
 
-	  current->core = core;	/* was CORE_INVAL */
+	  current->core = core;
 	  running_ps[core] = current;
 
 	}
@@ -691,10 +693,10 @@ lkd_proc_is_curr_task (linux_kthread_info_t * ps)
   return (ps && (ps == lkthread_get_running (ps->core)));
 }
 
-/* attempt getting the idle task for a core */
+/* Get the runqueue idle task_struct address for the given CPU core.  */
 
 static CORE_ADDR
-get_rq_idle (int core)
+lkthread_get_rq_idle (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_func_ptr);
@@ -706,7 +708,7 @@ get_rq_idle (int core)
   if (!curr_addr || !HAS_FIELD (rq, idle))
     return 0;
 
-  /* if not already obtained read from target */
+  /* If not already cached read from target.  */
   if (!lkthread_h->rq_idle[core])
     {
       curr_addr += (CORE_ADDR) lkthread_h->per_cpu_offset[core] +
@@ -736,8 +738,8 @@ get_process_count (int core)
     curr_addr += ADDR (per_cpu__process_counts);
   else
     {
-      /* return a fake, changing value so the thread list will be
-	 refreshed but in a less optimal way. */
+      /* Return a fake, changing value so the thread list will be
+	 refreshed but in a less optimal way.  */
       if (!warned)
 	fprintf_unfiltered (gdb_stdlog, "No `process_counts` symbol\n");
 
@@ -1045,21 +1047,25 @@ _next_thread (CORE_ADDR p)
   return container_of (cur_entry, task_struct, thread_group);
 }
 
+/* Iterate round linux task_struct linked list calling
+   lkthread_get_task_info() for each task_struct. Also
+   calls lkthread_get_task_info() for each CPU runqueue
+   idle task_struct to create swapper threads.  */
 
 static linux_kthread_info_t **
-get_list_helper (linux_kthread_info_t ** ps)
+lkthread_get_list_helper (linux_kthread_info_t ** ps)
 {
   struct linux_kthread_arch_ops *arch_ops =
     gdbarch_linux_kthread_ops (target_gdbarch ());
+  CORE_ADDR rq_idle_taskstruct;
   CORE_ADDR g, t, init_task_addr;
-  int core;
+  int core = 0, i;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "get_list_helper\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_list_helper\n");
 
   init_task_addr = ADDR (init_task);
   g = init_task_addr;
-  core = 0;
 
   do
     {
@@ -1074,19 +1080,18 @@ get_list_helper (linux_kthread_info_t ** ps)
               break;
 	    }
 
-          get_task_info (t, ps, core /*zero-based */ );
+          lkthread_get_task_info (t, ps, core /*zero-based */ );
           core = CORE_INVAL;
 
           if (ptid_get_tid (PTID_OF (*ps)) == 0)
             {
-              /* this is init_task, let's insert the other cores swapper now */
-              int i;
+              /* This is init_task, let's insert the other cores swapper
+		 now.  */
               for (i = 1; i < max_cores; i++)
                 {
-                  CORE_ADDR idle;
                   ps = &((*ps)->next);
-                  idle = get_rq_idle (i);
-                  get_task_info (idle, ps, i);
+                  rq_idle_taskstruct = lkthread_get_rq_idle (i);
+                  lkthread_get_task_info (rq_idle_taskstruct, ps, i);
                 }
             }
 
@@ -1096,10 +1101,9 @@ get_list_helper (linux_kthread_info_t ** ps)
 
           ps = &((*ps)->next);
 
-          /* mark end of chain and remove those threads
-           * that disappeared from the thread_list
-           * to avoid any_thread_of_process() to select a ghost.
-           **/
+	  /* Mark end of chain and remove those threads that disappeared
+	     from the thread_list to avoid any_thread_of_process() to
+	     select a ghost.  */
           if (*ps)
             (*ps)->valid = 0;
 
@@ -1115,24 +1119,23 @@ get_list_helper (linux_kthread_info_t ** ps)
 /*----------------------------------------------------------------------------*/
 
 /* This function returns a the list of 'linux_kthread_info_t' corresponding
- to the tasks in the kernel's task list. */
+   to the tasks in the kernel's task list.  */
 
 static linux_kthread_info_t *
-lkd_proc_get_list (void)
+lkthread_get_list (void)
 {
-  /* Return the cached copy if there's one,
-   * or rebuild it.
-   */
+  /* Return the cached copy if there is one,
+     or rebuild it.  */
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_list\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_list\n");
 
   if (lkthread_h->process_list && lkthread_h->process_list->valid)
     return lkthread_h->process_list;
 
   gdb_assert (kthread_list_invalid);
 
-  get_list_helper (&lkthread_h->process_list);
+  lkthread_get_list_helper (&lkthread_h->process_list);
 
   kthread_list_invalid = FALSE;
 
@@ -1607,8 +1610,8 @@ linux_kthread_update_thread_list (struct target_ops *ops)
   if (debug_linuxkthread_targetops)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_update_thread_list\n");
 
-  /* Build linux threads on top */
-  lkd_proc_get_list ();
+  /* Build linux threads on top.  */
+  lkthread_get_list ();
 
   prune_threads ();
 }
