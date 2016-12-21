@@ -55,7 +55,7 @@ static CORE_ADDR lkthread_get_rq_curr_addr (int core);
 static void lkthread_init (void);
 static void lkd_proc_free_list(void);
 static void lkthread_invalidate_list (void);
-static int lkd_proc_is_curr_task (linux_kthread_info_t * ps);
+static int lkthread_is_curr_task (linux_kthread_info_t * ps);
 static int lkd_proc_refresh_info (int core);
 
 static int kthread_list_invalid;
@@ -683,13 +683,14 @@ lkthread_get_running (int core)
   return running_ps[core];
 }
 
-/* Return 1 if this is a current task (or 0). */
+/* Return 1 if the passed linux_kthread_info_t is currently executing
+   on the CPU. Otherwise return 0.  */
 
 int
-lkd_proc_is_curr_task (linux_kthread_info_t * ps)
+lkthread_is_curr_task (linux_kthread_info_t * ps)
 {
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_is_curr_task\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_proc_is_curr_task\n");
 
   return (ps && (ps == lkthread_get_running (ps->core)));
 }
@@ -1420,7 +1421,7 @@ linux_kthread_fetch_registers (struct target_ops *ops,
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_fetch_registers\n");
 
-  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
+  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkthread_is_curr_task (ps))
     return beneath->to_fetch_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code.  */
@@ -1445,7 +1446,7 @@ linux_kthread_store_registers (struct target_ops *ops,
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_store_registers\n");
 
-  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkd_proc_is_curr_task (ps))
+  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkthread_is_curr_task (ps))
       return beneath->to_store_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code.  */
@@ -1636,7 +1637,7 @@ linux_kthread_extra_thread_info (struct target_ops *self,
 	 thread name if it is currently executing on the processor
 	 when the target was halted.  */
 
-      if (lkd_proc_is_curr_task (ps))
+      if (lkthread_is_curr_task (ps))
 	snprintf (msg + len, PRINT_CELL_SIZE - len, " <C%u>", ps->core);
 
       return msg;
