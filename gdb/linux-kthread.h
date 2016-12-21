@@ -26,7 +26,7 @@ struct addr_info
 {
   char *name;
   struct bound_minimal_symbol bmsym;
-  /* chained to allow easy cleanup */
+  /* Chained to allow easy cleanup.  */
   struct addr_info *next;
 };
 
@@ -37,12 +37,12 @@ struct field_info
   struct symbol *type;
   int offset;
   int size;
-  /* chained to allow easy cleanup */
+  /* Chained to allow easy cleanup.  */
   struct field_info *next;
 };
 
 
-/* The list of Linux threads cached by linux-kthread */
+/* The list of Linux threads cached by linux-kthread.  */
 typedef struct private_thread_info
 {
   struct private_thread_info *next;
@@ -52,7 +52,7 @@ typedef struct private_thread_info
 
   ptid_t old_ptid;
 
-  /*this is the "dynamic" core info */
+  /* This is the "dynamic" core info.  */
   int core;
 
   int tgid;
@@ -171,20 +171,18 @@ lkthread_get_field_size (struct field_info *field)
   extract_typed_address (base + F_OFFSET (struct, field),		\
 			 builtin_type(target_gdbarch ())->builtin_data_ptr)
 
-/* Mimic kernel macros */
+/* Mimic kernel macros.  */
 #define container_of(ptr, struc, field)  ((ptr) - F_OFFSET(struc, field))
 
 
-/*
- * Mapping GDB PTID to Linux PID and Core
- *
- * GDB Remote uses LWP to store the effective cpu core
- *  ptid.pid = Inferior PID
- *  ptid.lwp = CPU Core
- *  ptid.tid = 0
- *
- * We store Linux PID in TID.
- */
+/* Mapping GDB PTID to Linux PID and Core
+
+   GDB Remote uses LWP to store the effective cpu core
+   ptid.pid = Inferior PID
+   ptid.lwp = CPU Core
+   ptid.tid = 0
+ 
+   We store Linux PID in TID.  */
 
 /* Architecture-specific hooks.  */
 
@@ -217,7 +215,7 @@ extern void linux_kthread_set_collect_thread (struct gdbarch *gdbarch,
 						      int, CORE_ADDR));
 
 /* Return the macro replacement string for a given macro at a particular
-   symbol location */
+   symbol location.  */
 const char * kthread_find_macro_at_symbol(struct addr_info *symbol, char *name);
 
 
