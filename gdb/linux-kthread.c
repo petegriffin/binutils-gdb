@@ -56,7 +56,7 @@ static void lkthread_init (void);
 static void lkd_proc_free_list(void);
 static void lkthread_invalidate_list (void);
 static int lkthread_is_curr_task (linux_kthread_info_t * ps);
-static int lkd_proc_refresh_info (int core);
+static int lkthread_refresh_threadlist (int core);
 
 static int kthread_list_invalid;
 
@@ -922,7 +922,7 @@ lkthread_refresh_threadlist (int cur_core)
   int do_invalidate = 0;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n",
+    fprintf_unfiltered (gdb_stdlog, "lkthread_refresh_threadlist (%d)\n",
 			cur_core);
 
   /* Reset running_process and rq->curr cached values as they will
@@ -1294,7 +1294,7 @@ linux_kthread_activate (struct objfile *objfile)
   linux_kthread_active = 1;
 
   /* Scan the linux threads.  */
-  if (!lkd_proc_refresh_info (stop_core))
+  if (!lkthread_refresh_threadlist (stop_core))
     {
       if (debug_linuxkthread_threads)
 	  fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_failed\n");
@@ -1534,7 +1534,7 @@ linux_kthread_wait (struct target_ops *ops,
   inferior_ptid = stop_ptid;
 
   /* Rescan for new task, but avoid storming the debug connection.  */
-  lkd_proc_refresh_info (stop_core);
+  lkthread_refresh_threadlist (stop_core);
 
    /* The above calls might will end up accessing the registers
       of the target because of inhibit_thread_awareness(). However,
