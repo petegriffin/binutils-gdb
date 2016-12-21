@@ -45,8 +45,6 @@ static int debug_linuxkthread_threads=0;
 static int debug_linuxkthread_symbols=0;
 
 /* Forward declarations */
-void lkthread_invalidate_list (void);
-int lkd_proc_refresh_info (int core);
 
 static linux_kthread_info_t *lkd_proc_get_list (void);
 static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
@@ -56,20 +54,56 @@ static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkd_proc_get_rq_curr (int core);
 static void lkthread_init (void);
 static void lkd_proc_free_list(void);
+static void lkthread_invalidate_list (void);
 static int lkd_proc_is_curr_task (linux_kthread_info_t * ps);
+static int lkd_proc_refresh_info (int core);
 
 static int kthread_list_invalid;
-static unsigned char *scratch_buf;
-static int scratch_buf_size;
 
 /* Save the linux_kthreads ops returned by linux_kthread_target.  */
 static struct target_ops *linux_kthread_ops;
 
 /* Non-zero if the thread stratum implemented by this module is active.  */
 static int linux_kthread_active;
+static int linux_kthread_loaded;
+static int linux_kthread_debug;
 
-/* the core that triggered the event (zero-based)*/
+/* the core that triggered the event (zero-based) */
 int stop_core = 0;
+
+struct linux_kthread_data
+{
+  /* the processes list from Linux perspective */
+  linux_kthread_info_t *process_list = NULL;
+
+  /* the process we stopped at in target_wait */
+  linux_kthread_info_t *wait_process = NULL;
+
+  /* __per_cpu_offset */
+  CORE_ADDR *per_cpu_offset;
+
+  /* array of cur_rq(cpu) on each cpu */
+  CORE_ADDR *rq_curr;
+
+  /*array of rq->idle on each cpu */
+  CORE_ADDR *rq_idle;
+
+  /* array of scheduled process on each core */
+  linux_kthread_info_t **running_process = NULL;
+
+  /* array of process_counts for each cpu used for process list housekeeping */
+  unsigned long *process_counts;
+
+  /* Storage for the field layout and addresses already gathered. */
+  struct field_info *field_info_list;
+  struct addr_info *addr_info_list;
+
+  unsigned char *scratch_buf;
+  int scratch_buf_size;
+};
+
+/* Handle to global lkthread data.  */
+static struct linux_kthread_data *lkthread_h;
 
 static char *
 ptid_to_str (ptid_t ptid)
@@ -83,12 +117,9 @@ ptid_to_str (ptid_t ptid)
 
 /* Symbol and Field resolutions */
 
-/* Storage for the field layout and addresses already gathered. */
-static struct field_info *field_info_list;
-static struct addr_info *addr_info_list;
-
 /* Helper function called by ADDR macro to fetch the address of a symbol
    declared using DECLARE_ADDR macro */
+
 int
 lkthread_lookup_addr (struct addr_info *addr, int check)
 {
@@ -109,8 +140,8 @@ lkthread_lookup_addr (struct addr_info *addr, int check)
     }
 
   /* Chain initialized entries for cleanup. */
-  addr->next = addr_info_list;
-  addr_info_list = addr;
+  addr->next = lkthread_h->addr_info_list;
+  lkthread_h->addr_info_list = addr;
 
   if (debug_linuxkthread_symbols)
     fprintf_unfiltered (gdb_stdlog, "%s address is %s\n", addr->name,
@@ -176,8 +207,8 @@ lkthread_lookup_field (struct field_info *f, int check)
     }
 
   /* Chain initialized entries for cleanup. */
-  f->next = field_info_list;
-  field_info_list = f;
+  f->next = lkthread_h->field_info_list;
+  lkthread_h->field_info_list = f;
 
   if (debug_linuxkthread_symbols)
     {
@@ -190,27 +221,30 @@ lkthread_lookup_field (struct field_info *f, int check)
 }
 
 /* Cleanup all the field and address info that has been gathered. */
-static void
-fields_and_addrs_clear (void)
-{
-  struct field_info *next_field = field_info_list;
-  struct addr_info *next_addr = addr_info_list;
 
+static void
+lkthread_reset_fields_and_addrs (void)
+{
+  struct field_info *next_field = lkthread_h->field_info_list;
+  struct addr_info *next_addr = lkthread_h->addr_info_list;
+
+  /* clear list of collected fields */
   while (next_field)
     {
-      next_field = field_info_list->next;
-      field_info_list->type = NULL;
-      field_info_list->next = NULL;
-      field_info_list = next_field;
+      next_field = lkthread_h->field_info_list->next;
+      lkthread_h->field_info_list->type = NULL;
+      lkthread_h->field_info_list->next = NULL;
+      lkthread_h->field_info_list = next_field;
     }
 
+  /* clear list of collected addrs */
   while (next_addr)
     {
-      next_addr = addr_info_list->next;
-      addr_info_list->bmsym.minsym = NULL;
-      addr_info_list->bmsym.objfile = NULL;
-      addr_info_list->next = NULL;
-      addr_info_list = next_addr;
+      next_addr = lkthread_h->addr_info_list->next;
+      lkthread_h->addr_info_list->bmsym.minsym = NULL;
+      lkthread_h->addr_info_list->bmsym.objfile = NULL;
+      lkthread_h->addr_info_list->next = NULL;
+      lkthread_h->addr_info_list = next_addr;
     }
 }
 
@@ -311,22 +345,6 @@ DECLARE_ADDR (runqueues);
 #define CORE_INVAL (-1)		/* 0 = name on the inferior, cannot be used */
 int max_cores = CORE_INVAL;
 
-/* the processes list from Linux perspective */
-linux_kthread_info_t *process_list = NULL;
-/* the process we stopped at in target_wait */
-linux_kthread_info_t *wait_process = NULL;
-
-/* __per_cpu_offset */
-CORE_ADDR *per_cpu_offset;
-
-/* array of cur_rq(cpu) on each cpu */
-CORE_ADDR *rq_curr;
-/*array of rq->idle on each cpu */
-CORE_ADDR *rq_idle;
-/* array of scheduled process on each core */
-linux_kthread_info_t **running_process = NULL;
-/* array of process_counts for each cpu used for process list housekeeping */
-static unsigned long *kthread_process_counts;
 
 static int last_pid;
 
@@ -416,28 +434,30 @@ get_task_info (CORE_ADDR task_struct, linux_kthread_info_t ** ps,
     {
       size = F_OFFSET (task_struct, comm) + F_SIZE (task_struct, comm);
 
-      task_name = scratch_buf + F_OFFSET (task_struct, comm);
+      task_name = lkthread_h->scratch_buf + F_OFFSET (task_struct, comm);
 
       /* use scratch area for messing around with strings
        * to avoid static arrays and dispersed mallocs and frees
        **/
-      gdb_assert (scratch_buf);
-      gdb_assert (scratch_buf_size >= size);
+      gdb_assert (lkthread_h->scratch_buf);
+      gdb_assert (lkthread_h->scratch_buf_size >= size);
 
       /* the task struct is not likely to change much from one kernel version
        * to another. Knowing that comm is one of the far fields,
        * try read the task struct in one command */
-      read_memory (task_struct, scratch_buf, size);
+      read_memory (task_struct, lkthread_h->scratch_buf, size);
 
       l_ps->task_struct = task_struct;
-      tid = extract_unsigned_field (scratch_buf, task_struct, pid, byte_order);
-      l_ps->mm = extract_pointer_field (scratch_buf,
+      tid = extract_unsigned_field (lkthread_h->scratch_buf, task_struct,
+				    pid, byte_order);
+
+      l_ps->mm = extract_pointer_field (lkthread_h->scratch_buf,
 					task_struct, mm);
-      l_ps->active_mm = extract_pointer_field (scratch_buf,
+      l_ps->active_mm = extract_pointer_field (lkthread_h->scratch_buf,
 					       task_struct, active_mm);
-      l_ps->tgid = extract_unsigned_field (scratch_buf,
+      l_ps->tgid = extract_unsigned_field (lkthread_h->scratch_buf,
 					   task_struct, tgid, byte_order);
-      l_ps->prio = extract_unsigned_field (scratch_buf,
+      l_ps->prio = extract_unsigned_field (lkthread_h->scratch_buf,
 					   task_struct, prio, byte_order);
       l_ps->core = core;	/* for to_core_of_threads */
 
@@ -536,20 +556,22 @@ lkd_proc_get_rq_curr (int core)
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_rq_curr core(%d)\n", core);
 
-  if (!rq_curr[core])
+  if (!lkthread_h->rq_curr[core])
     {
       CORE_ADDR curr_addr = lkthread_get_runqueues_addr ();
       if (!curr_addr)
 	return 0;
-      curr_addr =
-	curr_addr + (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, curr);
 
-      rq_curr[core] = read_memory_unsigned_integer (curr_addr, length,
-						    byte_order);
+      curr_addr = curr_addr + (CORE_ADDR) lkthread_h->per_cpu_offset[core] +
+	F_OFFSET (rq, curr);
+
+      lkthread_h->rq_curr[core] = read_memory_unsigned_integer (curr_addr,
+								length,
+								byte_order);
     }
 
-  return rq_curr[core];
-};
+  return lkthread_h->rq_curr[core];
+}
 
 /* Return the address of runqueues either from runqueues
    symbol or more likely per_cpu__runqueues symbol. */
@@ -597,6 +619,7 @@ lkd_proc_get_by_task_struct (CORE_ADDR task_struct)
 linux_kthread_info_t *
 lkthread_get_running (int core)
 {
+  linux_kthread_info_t **running_ps = lkthread_h->running_process;
   linux_kthread_info_t *current = NULL;
   CORE_ADDR task;
 
@@ -607,7 +630,7 @@ lkthread_get_running (int core)
     return NULL;
 
   /* if not already obtained fetch from target */
-  if (running_process[core] == NULL)
+  if (running_ps[core] == NULL)
     {
 
       gdb_assert (lkthread_get_runqueues_addr ());
@@ -643,17 +666,17 @@ lkthread_get_running (int core)
 	    }
 
 	  current->core = core;	/* was CORE_INVAL */
-	  running_process[core] = current;
+	  running_ps[core] = current;
 
 	}
     }
 
     if (debug_linuxkthread_threads)
       fprintf_unfiltered (gdb_stdlog, "running ps[%d]: comm = %s ptid=%s\n",
-			  core, running_process[core]->comm,
-			  ptid_to_str(PTID_OF (running_process[core])));
+			  core, running_ps[core]->comm,
+			  ptid_to_str(PTID_OF (running_ps[core])));
 
-  return running_process[core];
+  return running_ps[core];
 }
 
 /* Return 1 if this is a current task (or 0)*/
@@ -666,7 +689,7 @@ lkd_proc_is_curr_task (linux_kthread_info_t * ps)
   return (ps && (ps == lkthread_get_running (ps->core)));
 }
 
-/*attempt getting the idle task for a core */
+/* attempt getting the idle task for a core */
 
 static CORE_ADDR
 get_rq_idle (int core)
@@ -681,26 +704,29 @@ get_rq_idle (int core)
   if (!curr_addr || !HAS_FIELD (rq, idle))
     return 0;
 
-  if (!rq_idle[core])
+  /* if not already obtained read from target */
+  if (!lkthread_h->rq_idle[core])
     {
-      curr_addr += (CORE_ADDR) per_cpu_offset[core] + F_OFFSET (rq, idle);
+      curr_addr += (CORE_ADDR) lkthread_h->per_cpu_offset[core] +
+	F_OFFSET (rq, idle);
 
-      rq_idle[core] = read_memory_unsigned_integer (curr_addr, length,
-						    byte_order);
+      lkthread_h->rq_idle[core] = read_memory_unsigned_integer (curr_addr,
+								length,
+								byte_order);
     }
 
-  return rq_idle[core];
+  return lkthread_h->rq_idle[core];
 }
 
 static int
 get_process_count (int core)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
-  CORE_ADDR curr_addr = (CORE_ADDR) per_cpu_offset[core];
+  CORE_ADDR curr_addr = (CORE_ADDR) lkthread_h->per_cpu_offset[core];
   int length =
     TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_long);
   static int warned = 0;
-  int proc_cnt;
+  int process_count;
 
   if (HAS_ADDR (process_counts))
     curr_addr += ADDR (process_counts);
@@ -708,23 +734,23 @@ get_process_count (int core)
     curr_addr += ADDR (per_cpu__process_counts);
   else
     {
-      /* return a fake, changing value
-       * at least the list will be refreshed, but in a less optimal way.*/
+      /* return a fake, changing value so the thread list will be
+	 refreshed but in a less optimal way. */
       if (!warned)
-	printf_filtered ("this kernel does not support `process_counts`\n");
+	fprintf_unfiltered (gdb_stdlog, "No `process_counts` symbol\n");
 
       warned++;
       return warned;
     }
 
-  proc_cnt = read_memory_unsigned_integer (curr_addr, length, byte_order);
+  process_count = read_memory_unsigned_integer (curr_addr, length, byte_order);
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "core(%d) curr_addr=0x%lx proc_cnt=%d\n",
-			core, curr_addr, proc_cnt);
+			core, curr_addr, process_count);
 
-  return proc_cnt;
-};
+  return process_count;
+}
 
 static int
 get_last_pid (void)
@@ -747,10 +773,11 @@ get_last_pid (void)
 static void
 lkthread_memset_percpu_data(int numcores)
 {
-  memset (running_process, 0x0, numcores * sizeof (linux_kthread_info_t *));
-  memset (rq_curr, 0x0, numcores * sizeof (CORE_ADDR));
-  memset (rq_idle, 0x0, numcores * sizeof (CORE_ADDR));
-  memset (per_cpu_offset, 0, numcores * sizeof (CORE_ADDR));
+  memset (lkthread_h->running_process, 0x0,
+	  numcores * sizeof (linux_kthread_info_t *));
+  memset (lkthread_h->rq_curr, 0x0, numcores * sizeof (CORE_ADDR));
+  memset (lkthread_h->rq_idle, 0x0, numcores * sizeof (CORE_ADDR));
+  memset (lkthread_h->per_cpu_offset, 0, numcores * sizeof (CORE_ADDR));
 }
 
 /* Allocate memory which is dependent on number of physical CPUs */
@@ -760,14 +787,14 @@ lkthread_alloc_percpu_data(int numcores)
 {
   gdb_assert (numcores >= 1);
 
-  running_process = XNEWVEC (linux_kthread_info_t *, numcores);
-  kthread_process_counts = XNEWVEC (unsigned long, numcores);
+  lkthread_h->running_process = XNEWVEC (linux_kthread_info_t *, numcores);
+  lkthread_h->process_counts = XNEWVEC (unsigned long, numcores);
 
-  per_cpu_offset = XNEWVEC (CORE_ADDR, numcores);
-  rq_curr = XNEWVEC (CORE_ADDR, numcores);
-  rq_idle = XNEWVEC (CORE_ADDR, numcores);
+  lkthread_h->per_cpu_offset = XNEWVEC (CORE_ADDR, numcores);
+  lkthread_h->rq_curr = XNEWVEC (CORE_ADDR, numcores);
+  lkthread_h->rq_idle = XNEWVEC (CORE_ADDR, numcores);
 
-  memset (kthread_process_counts, 0, sizeof (unsigned long));
+  memset (lkthread_h->process_counts, 0, sizeof (unsigned long));
   lkthread_memset_percpu_data(numcores);
 }
 
@@ -776,11 +803,11 @@ lkthread_alloc_percpu_data(int numcores)
 static void
 lkthread_free_percpu_data(int numcores)
 {
-  xfree(running_process);
-  xfree(kthread_process_counts);
-  xfree(per_cpu_offset);
-  xfree(rq_curr);
-  xfree(rq_idle);
+  xfree(lkthread_h->running_process);
+  xfree(lkthread_h->process_counts);
+  xfree(lkthread_h->per_cpu_offset);
+  xfree(lkthread_h->rq_curr);
+  xfree(lkthread_h->rq_idle);
 }
 
 void
@@ -805,14 +832,13 @@ get_per_cpu_offsets(int numcores)
 
   for (core=0; core < numcores; core++)
     {
-      if (!per_cpu_offset[core])
-	per_cpu_offset[core] = read_memory_unsigned_integer (curr_addr,
-							     length,
-							     byte_order);
+      if (!lkthread_h->per_cpu_offset[core])
+	lkthread_h->per_cpu_offset[core] =
+	  read_memory_unsigned_integer (curr_addr, length, byte_order);
 
       curr_addr += (CORE_ADDR) length;
 
-      if (!per_cpu_offset[core])
+      if (!lkthread_h->per_cpu_offset[core])
 	{
 	  warning ("Suspicious null per-cpu offsets,"
 		   " or wrong number of detected cores:\n"
@@ -848,10 +874,6 @@ lkthread_init (void)
   struct cleanup *cleanup;
   int size =
     TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_unsigned_long);
-
-  /* Allocate private scratch buffer */
-  scratch_buf_size = 4096;
-  scratch_buf = (unsigned char *) xcalloc (scratch_buf_size, sizeof (char));
 
   /* ensure thread list from beneath target is up to date */
   cleanup = make_cleanup_restore_integer (&print_thread_events);
@@ -894,8 +916,10 @@ lkd_proc_refresh_info (int cur_core)
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n", cur_core);
 
-  memset (running_process, 0, max_cores * sizeof (linux_kthread_info_t *));
-  memset (rq_curr, 0, max_cores * sizeof (CORE_ADDR));
+  /* clear cached values so they are refreshed from target */
+  memset (lkthread_h->running_process, 0,
+	  max_cores * sizeof (linux_kthread_info_t *));
+  memset (lkthread_h->rq_curr, 0, max_cores * sizeof (CORE_ADDR));
 
   new_last_pid = get_last_pid ();
   if (new_last_pid != last_pid)
@@ -917,9 +941,9 @@ lkd_proc_refresh_info (int cur_core)
 	  return 0;
 	}
 
-      if (new_pcount != kthread_process_counts[core])
+      if (new_pcount != lkthread_h->process_counts[core])
 	{
-	  kthread_process_counts[core] = new_pcount;
+	  lkthread_h->process_counts[core] = new_pcount;
 	  do_invalidate = 1;
 	}
     }
@@ -950,23 +974,23 @@ lkd_proc_refresh_info (int cur_core)
   for (core = 0; core < max_cores; core++)
     lkthread_get_running (core);
 
-  wait_process = lkthread_get_running (cur_core);
+  lkthread_h->wait_process = lkthread_get_running (cur_core);
 
-  if (!wait_process)
+  if (!lkthread_h->wait_process)
     return 0;
 
-  gdb_assert(wait_process->gdb_thread);
+  gdb_assert(lkthread_h->wait_process->gdb_thread);
 
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "wait_process comm=%s ptid= %s\n",
-			wait_process->comm,
-			ptid_to_str(PTID_OF (wait_process)));
+			lkthread_h->wait_process->comm,
+			ptid_to_str(PTID_OF (lkthread_h->wait_process)));
 
-  gdb_assert((linux_kthread_info_t *) wait_process->gdb_thread->priv == wait_process);
-
+  gdb_assert((linux_kthread_info_t *) lkthread_h->wait_process->gdb_thread->priv
+	     == lkthread_h->wait_process);
 
   /* Notify ptid changed. */
-  ps = process_list;
+  ps = lkthread_h->process_list;
   while (ps && ps->valid)
     {
       if (ptid_get_tid(ps->old_ptid) != ptid_get_tid(PTID_OF (ps)))
@@ -977,8 +1001,8 @@ lkd_proc_refresh_info (int cur_core)
       ps = ps->next;
     }
 
-  switch_to_thread(PTID_OF (wait_process));
-  gdb_assert(lkd_proc_get_by_ptid(inferior_ptid) == wait_process);
+  switch_to_thread(PTID_OF (lkthread_h->wait_process));
+  gdb_assert(lkd_proc_get_by_ptid(inferior_ptid) == lkthread_h->wait_process);
 
   return 1;
 }
@@ -1090,6 +1114,7 @@ get_list_helper (linux_kthread_info_t ** ps)
 
 /* This function returns a the list of 'linux_kthread_info_t' corresponding
  to the tasks in the kernel's task list. */
+
 static linux_kthread_info_t *
 lkd_proc_get_list (void)
 {
@@ -1100,12 +1125,12 @@ lkd_proc_get_list (void)
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "lkd_proc_get_list\n");
 
-  if (process_list && process_list->valid)
-    return process_list;
+  if (lkthread_h->process_list && lkthread_h->process_list->valid)
+    return lkthread_h->process_list;
 
   gdb_assert (kthread_list_invalid);
 
-  get_list_helper (&process_list);
+  get_list_helper (&lkthread_h->process_list);
 
   kthread_list_invalid = FALSE;
 
@@ -1113,13 +1138,14 @@ lkd_proc_get_list (void)
     fprintf_unfiltered (gdb_stdlog, "kthread_list_invalid (%d)\n",
 			kthread_list_invalid);
 
-  return process_list;
+  return lkthread_h->process_list;
 }
 
 /* Returns a valid 'linux_kthread_info_t' corresponding to
  * the passed ptid or NULL if not found. NULL means
  * the thread needs to be pruned.
  */
+
 linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
 {
   struct thread_info *tp;
@@ -1130,10 +1156,6 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
   /* check list is valid */
   gdb_assert(!kthread_list_invalid);
 
-  /* We must ensure that we don't try to return
-   *  threads created by another layer ... such as the remote layer
-   */
-
   if (tid)
     {
 	  /* non-swapper, tid is Linux pid */
@@ -1141,7 +1163,7 @@ linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
     }
   else
     {
-	  /*swapper, LWP gives the core, tid = 0 is not unique */
+	  /*swapper, lwp gives the core, tid = 0 and is not unique */
 	  tp = iterate_over_threads (find_thread_swapper, (void *) &lwp);
     }
 
@@ -1170,7 +1192,7 @@ thread_clear_info (struct thread_info *tp, void *ignored)
 void
 lkthread_invalidate_list (void)
 {
-  linux_kthread_info_t *ps = process_list;
+  linux_kthread_info_t *ps = lkthread_h->process_list;
   linux_kthread_info_t *cur;
 
   while (ps)
@@ -1196,7 +1218,7 @@ lkthread_invalidate_list (void)
 static void
 lkd_proc_free_list (void)
 {
-  linux_kthread_info_t *ps = process_list;
+  linux_kthread_info_t *ps = lkthread_h->process_list;
   linux_kthread_info_t *cur;
   while (ps)
     {
@@ -1205,7 +1227,7 @@ lkd_proc_free_list (void)
       xfree (cur->comm);
       xfree (cur);
     }
-  process_list = NULL;
+  lkthread_h->process_list = NULL;
 }
 
 /* Target Layer Implementation  */
@@ -1231,6 +1253,14 @@ linux_kthread_activate (struct objfile *objfile)
      architecture-specific operations are provided.  */
   if (!arch_ops)
     return 0;
+
+  /* Allocate global data struct */
+  lkthread_h = XCNEW (struct linux_kthread_data);
+
+  /* Allocate private scratch buffer */
+  lkthread_h->scratch_buf_size = 4096;
+  lkthread_h->scratch_buf =
+    (unsigned char *) xcalloc (lkthread_h->scratch_buf_size, sizeof (char));
 
   /* Verify that this represents an appropriate linux target */
 
@@ -1272,17 +1302,44 @@ linux_kthread_activate (struct objfile *objfile)
   return 1;
 }
 
-/* Cleanup due to deactivation.  */
+/* The linux-kthread to_load target_ops method */
+
+static void
+linux_kthread_load (struct target_ops *ops, const char *prog, int fromtty)
+{
+  struct target_ops *beneath = find_target_beneath (ops);
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_load\n");
+
+  beneath->to_load (ops, prog, fromtty);
+}
+
+/* The target_ops callback called by GDB to load the attach to an
+ already running program. Just sets 'loaded' to 1, as the program is
+ already loaded. If you attach with a non standard command, you have
+ to do 'set linux-awareness loaded 1' by hand. */
+
+static void
+linux_kthread_attach (struct target_ops *ops, const char *prog, int fromtty)
+{
+  struct target_ops *beneath = find_target_beneath (ops);
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_attach\n");
+
+  beneath->to_attach (ops, prog, fromtty);
+}
+
+
+/* The linux-kthread to_close target_ops method */
+
 static void
 linux_kthread_close (struct target_ops *self)
 {
   if (debug_linuxkthread_targetops)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_close\n");
 
-  linux_kthread_active=0;
-
-  /* Reset global variables */
-  fields_and_addrs_clear ();
 }
 
 /* Deactivate the linux-kthread stratum implemented by this module.  */
@@ -1299,20 +1356,25 @@ linux_kthread_deactivate (void)
   if (!linux_kthread_active)
     return;
 
-  wait_process = NULL;
+  lkthread_h->wait_process = NULL;
 
   lkthread_invalidate_list();
 
   lkd_proc_free_list ();
 
-  /* fallback to any thread that makes sense for the beneath target */
-  //lkd_reset_thread_list ();
+  /* Reset collected symbol info */
+  lkthread_reset_fields_and_addrs ();
 
+  /* fallback to any thread that makes sense for the beneath target */
   unpush_target (linux_kthread_ops);
 
+  /* so we are only left with physical CPU threads from beneath target */
   prune_threads();
 
   lkthread_free_percpu_data(max_cores);
+
+  /* free global lkthread struct */
+  xfree(lkthread_h);
 
   linux_kthread_active = 0;
 }
@@ -1479,9 +1541,9 @@ linux_kthread_wait (struct target_ops *ops,
       what the user will ask in his commands. */
    set_executing (minus_one_ptid, 0);
 
-   if (wait_process)
+   if (lkthread_h->wait_process)
      {
-       inferior_ptid = PTID_OF (wait_process);
+       inferior_ptid = PTID_OF (lkthread_h->wait_process);
        stop_ptid = inferior_ptid;
      }
 
