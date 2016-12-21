@@ -1186,7 +1186,8 @@ linux_kthread_info_t *lkthread_get_by_ptid (ptid_t ptid)
   return ps;
 }
 
-/* Invalidate the gdb thread if the linux ps has died. */
+/* Iterate_over_threads() callback. Invalidate the gdb thread if
+   the linux process has died.  */
 
 static int
 thread_clear_info (struct thread_info *tp, void *ignored)
@@ -1195,9 +1196,9 @@ thread_clear_info (struct thread_info *tp, void *ignored)
   return 0;
 }
 
-/* Invalidate the cached task list.  */
+/* Invalidate the cached Linux task list.  */
 
-void
+static void
 lkthread_invalidate_threadlist (void)
 {
   linux_kthread_info_t *ps = lkthread_h->process_list;
@@ -1299,7 +1300,7 @@ linux_kthread_activate (struct objfile *objfile)
   if (!lkthread_refresh_threadlist (stop_core))
     {
       if (debug_linuxkthread_threads)
-	  fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_failed\n");
+	  fprintf_unfiltered (gdb_stdlog, "lkthread_refresh_threadlist\n");
 
       /* Don't activate linux-kthread as no threads were found.  */
       lkthread_invalidate_threadlist ();
