@@ -54,7 +54,7 @@ static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkthread_get_rq_curr_addr (int core);
 static void lkthread_init (void);
 static void lkd_proc_free_list(void);
-static void lkthread_invalidate_list (void);
+static void lkthread_invalidate_threadlist (void);
 static int lkthread_is_curr_task (linux_kthread_info_t * ps);
 static int lkthread_refresh_threadlist (int core);
 
@@ -906,7 +906,7 @@ lkthread_init (void)
 			"less precise\n.");
 
   /* Invalidate the linux-kthread cached list.  */
-  lkthread_invalidate_list ();
+  lkthread_invalidate_threadlist ();
 }
 
 /* Determines whether the cached Linux thread list needs
@@ -959,7 +959,7 @@ lkthread_refresh_threadlist (int cur_core)
     }
 
   if (do_invalidate)
-      lkthread_invalidate_list ();
+      lkthread_invalidate_threadlist ();
 
   /* Update the process_list now, so that init_task is in there. */
   (void) lkthread_get_threadlist ();
@@ -1198,7 +1198,7 @@ thread_clear_info (struct thread_info *tp, void *ignored)
 /* Invalidate the cached task list.  */
 
 void
-lkthread_invalidate_list (void)
+lkthread_invalidate_threadlist (void)
 {
   linux_kthread_info_t *ps = lkthread_h->process_list;
   linux_kthread_info_t *cur;
@@ -1300,7 +1300,7 @@ linux_kthread_activate (struct objfile *objfile)
 	  fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_failed\n");
 
       /* Don't activate linux-kthread as no threads were found.  */
-      lkthread_invalidate_list ();
+      lkthread_invalidate_threadlist ();
 
       prune_threads();
       return 0;
@@ -1365,7 +1365,7 @@ linux_kthread_deactivate (void)
 
   lkthread_h->wait_process = NULL;
 
-  lkthread_invalidate_list();
+  lkthread_invalidate_threadlist();
 
   lkd_proc_free_list ();
 
