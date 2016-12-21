@@ -53,7 +53,7 @@ static linux_kthread_info_t *lkthread_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
 static CORE_ADDR lkthread_get_rq_curr_addr (int core);
 static void lkthread_init (void);
-static void lkd_proc_free_list(void);
+static void lkthread_free_threadlist(void);
 static void lkthread_invalidate_threadlist (void);
 static int lkthread_is_curr_task (linux_kthread_info_t * ps);
 static int lkthread_refresh_threadlist (int core);
@@ -1223,8 +1223,10 @@ lkthread_invalidate_threadlist (void)
 			kthread_list_invalid);
 }
 
+/* Free memory allocated in the task list.  */
+
 static void
-lkd_proc_free_list (void)
+lkthread_free_threadlist (void)
 {
   linux_kthread_info_t *ps = lkthread_h->process_list;
   linux_kthread_info_t *cur;
@@ -1367,7 +1369,7 @@ linux_kthread_deactivate (void)
 
   lkthread_invalidate_threadlist();
 
-  lkd_proc_free_list ();
+  lkthread_free_threadlist ();
 
   /* Reset collected symbol info.  */
   lkthread_reset_fields_and_addrs ();
