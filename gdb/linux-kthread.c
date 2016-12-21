@@ -58,7 +58,11 @@ static void lkthread_invalidate_threadlist (void);
 static int lkthread_is_curr_task (linux_kthread_info_t * ps);
 static int lkthread_refresh_threadlist (int core);
 
+/* Whether the cached Linux thread list needs refreshing */
 static int kthread_list_invalid;
+
+/* Whether target_ops to_interrupt is disabled */
+static int lkthread_disable_to_interrupt=0;
 
 /* Save the linux_kthreads ops returned by linux_kthread_target.  */
 static struct target_ops *linux_kthread_ops;
@@ -1718,6 +1722,20 @@ linux_kthread_is_async_p (struct target_ops *ops)
   return 0;
 }
 
+/* The linux-kthread to_interrupt target_ops method.  */
+
+static void
+linux_kthread_interrupt (struct target_ops *ops, ptid_t ptid)
+{
+  struct target_ops *beneath = find_target_beneath (ops);
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "linux_kthread_interrupt called\n");
+
+  if (!lkthread_disable_to_interrupt)
+    beneath->to_interrupt(ops, ptid);
+}
+
 static struct target_ops *
 linux_kthread_target (void)
 {
@@ -1744,13 +1762,10 @@ linux_kthread_target (void)
   t->to_pid_to_str = linux_kthread_pid_to_str;
   t->to_stratum = thread_stratum;
   t->to_magic = OPS_MAGIC;
-  linux_kthread_ops = t;
 
-  /* Prevent Async operations
-   * LKD doesn't yet support ASync,
-   * Particularly on connect/resume, which can break things
-   * when connecting to an async target such as QEmu
-   */
+  t->to_interrupt = linux_kthread_interrupt;
+
+  linux_kthread_ops = t;
 
   /* Prevent async operations */
   t->to_can_async_p = linux_kthread_can_async_p;
