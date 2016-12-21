@@ -817,7 +817,7 @@ lkthread_free_percpu_data(int numcores)
 }
 
 void
-get_per_cpu_offsets(int numcores)
+lkthread_get_per_cpu_offsets(int numcores)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   int length = TYPE_LENGTH (builtin_type (target_gdbarch ())->builtin_data_ptr);
@@ -898,7 +898,7 @@ lkthread_init (void)
   /* Allocate per cpu data.  */
   lkthread_alloc_percpu_data(max_cores);
 
-  get_per_cpu_offsets(max_cores);
+  lkthread_get_per_cpu_offsets(max_cores);
 
   if (!lkthread_get_runqueues_addr () && (max_cores > 1))
     fprintf_unfiltered (gdb_stdlog, "Could not find the address of CPU"
