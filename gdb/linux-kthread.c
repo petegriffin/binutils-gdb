@@ -46,8 +46,8 @@ static int debug_linuxkthread_symbols=0;
 
 /* Forward declarations */
 
-static linux_kthread_info_t *lkthread_get_list (void);
-static linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid);
+static linux_kthread_info_t *lkthread_get_threadlist (void);
+static linux_kthread_info_t *lkthread_get_by_ptid (ptid_t ptid);
 static linux_kthread_info_t *lkthread_get_by_task_struct (CORE_ADDR task);
 static linux_kthread_info_t *lkthread_get_running (int core);
 static CORE_ADDR lkthread_get_runqueues_addr (void);
@@ -604,7 +604,7 @@ lkthread_get_runqueues_addr (void)
 linux_kthread_info_t *
 lkthread_get_by_task_struct (CORE_ADDR task_struct)
 {
-  linux_kthread_info_t *ps = lkthread_get_list ();
+  linux_kthread_info_t *ps = lkthread_get_threadlist ();
 
   while ((ps != NULL) && (ps->valid == 1))
     {
@@ -654,7 +654,7 @@ lkthread_get_running (int core)
 		 the swapper of an secondary SMP core.  */
 
 	      current =
-		lkd_proc_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid),
+		lkthread_get_by_ptid (ptid_build(ptid_get_pid(inferior_ptid),
 						 core + 1, 0));
 
 	      gdb_assert(current);
@@ -902,14 +902,19 @@ lkthread_init (void)
 
   if (!lkthread_get_runqueues_addr () && (max_cores > 1))
     fprintf_unfiltered (gdb_stdlog, "Could not find the address of CPU"
-			" runqueues current context information maybe less precise\n.");
+			" runqueues current context information maybe "
+			"less precise\n.");
 
   /* Invalidate the linux-kthread cached list.  */
   lkthread_invalidate_list ();
 }
 
+/* Determines whether the cached Linux thread list needs
+   to be invalidated and rebuilt by inspecting the targets
+   memory.  */
+
 int
-lkd_proc_refresh_info (int cur_core)
+lkthread_refresh_threadlist (int cur_core)
 {
   int core;
   int new_last_pid;
@@ -917,9 +922,11 @@ lkd_proc_refresh_info (int cur_core)
   int do_invalidate = 0;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n", cur_core);
+    fprintf_unfiltered (gdb_stdlog, "lkd_proc_refresh_info (%d)\n",
+			cur_core);
 
-  /* Clear cached values so they are refreshed from target.  */
+  /* Reset running_process and rq->curr cached values as they will
+     always need to be refreshed.  */
   memset (lkthread_h->running_process, 0,
 	  max_cores * sizeof (linux_kthread_info_t *));
   memset (lkthread_h->rq_curr, 0, max_cores * sizeof (CORE_ADDR));
@@ -955,10 +962,10 @@ lkd_proc_refresh_info (int cur_core)
       lkthread_invalidate_list ();
 
   /* Update the process_list now, so that init_task is in there. */
-  (void) lkthread_get_list ();
+  (void) lkthread_get_threadlist ();
 
-  /* Call update_thread_list() to prune GDB threads which are no longer linked
-     to a Linux task no longer linked to a linux task. */
+  /* Call update_thread_list() to prune GDB threads which are no
+     longer linked to a Linux task. */
 
   if (linux_kthread_active)
     update_thread_list();
@@ -1003,7 +1010,7 @@ lkd_proc_refresh_info (int cur_core)
     }
 
   switch_to_thread(PTID_OF (lkthread_h->wait_process));
-  gdb_assert(lkd_proc_get_by_ptid(inferior_ptid) == lkthread_h->wait_process);
+  gdb_assert(lkthread_get_by_ptid(inferior_ptid) == lkthread_h->wait_process);
 
   return 1;
 }
@@ -1050,7 +1057,7 @@ _next_thread (CORE_ADDR p)
    idle task_struct to create swapper threads.  */
 
 static linux_kthread_info_t **
-lkthread_get_list_helper (linux_kthread_info_t ** ps)
+lkthread_get_threadlist_helper (linux_kthread_info_t ** ps)
 {
   struct linux_kthread_arch_ops *arch_ops =
     gdbarch_linux_kthread_ops (target_gdbarch ());
@@ -1059,7 +1066,7 @@ lkthread_get_list_helper (linux_kthread_info_t ** ps)
   int core = 0, i;
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkthread_get_list_helper\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_get_threadlist_helper\n");
 
   init_task_addr = ADDR (init_task);
   g = init_task_addr;
@@ -1119,20 +1126,20 @@ lkthread_get_list_helper (linux_kthread_info_t ** ps)
    to the tasks in the kernel's task list.  */
 
 static linux_kthread_info_t *
-lkthread_get_list (void)
+lkthread_get_threadlist (void)
 {
   /* Return the cached copy if there is one,
      or rebuild it.  */
 
   if (debug_linuxkthread_threads)
-    fprintf_unfiltered (gdb_stdlog, "lkthread_get_list\n");
+    fprintf_unfiltered (gdb_stdlog, "lkthread_getthread_list\n");
 
   if (lkthread_h->process_list && lkthread_h->process_list->valid)
     return lkthread_h->process_list;
 
   gdb_assert (kthread_list_invalid);
 
-  lkthread_get_list_helper (&lkthread_h->process_list);
+  lkthread_get_threadlist_helper (&lkthread_h->process_list);
 
   kthread_list_invalid = FALSE;
 
@@ -1147,7 +1154,7 @@ lkthread_get_list (void)
    the passed ptid or NULL if not found. NULL means
    the thread needs to be pruned.  */
 
-linux_kthread_info_t *lkd_proc_get_by_ptid (ptid_t ptid)
+linux_kthread_info_t *lkthread_get_by_ptid (ptid_t ptid)
 {
   struct thread_info *tp;
   long tid = ptid_get_tid(ptid);
@@ -1421,7 +1428,8 @@ linux_kthread_fetch_registers (struct target_ops *ops,
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_fetch_registers\n");
 
-  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkthread_is_curr_task (ps))
+  if (!(ps = lkthread_get_by_ptid (inferior_ptid))
+      || lkthread_is_curr_task (ps))
     return beneath->to_fetch_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code.  */
@@ -1446,7 +1454,7 @@ linux_kthread_store_registers (struct target_ops *ops,
   if (debug_linuxkthread_threads)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_store_registers\n");
 
-  if (!(ps = lkd_proc_get_by_ptid (inferior_ptid)) || lkthread_is_curr_task (ps))
+  if (!(ps = lkthread_get_by_ptid (inferior_ptid)) || lkthread_is_curr_task (ps))
       return beneath->to_store_registers (beneath, regcache, regnum);
 
   /* Call the platform specific code.  */
@@ -1580,7 +1588,7 @@ linux_kthread_thread_alive (struct target_ops *ops, ptid_t ptid)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_thread_alive ptid=%s\n",
 			ptid_to_str(ptid));
 
-  ps = lkd_proc_get_by_ptid (ptid);
+  ps = lkthread_get_by_ptid (ptid);
 
   if (!ps)
     {
@@ -1607,7 +1615,7 @@ linux_kthread_update_thread_list (struct target_ops *ops)
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_update_thread_list\n");
 
   /* Build linux threads on top.  */
-  lkthread_get_list ();
+  lkthread_get_threadlist ();
 
   prune_threads ();
 }
