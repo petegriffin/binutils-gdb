@@ -1287,7 +1287,7 @@ linux_kthread_activate (struct objfile *objfile)
   if (!arch_ops->is_kernel_address(pc))
   {
     fprintf_unfiltered (gdb_stdlog, "linux_kthread_activate() target"
-			"stopped in user space\n");
+			" stopped in user space\n");
     return 0;
   }
 
