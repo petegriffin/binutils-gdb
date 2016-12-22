@@ -1317,36 +1317,6 @@ linux_kthread_activate (struct objfile *objfile)
   return 1;
 }
 
-/* The linux-kthread to_load target_ops method.  */
-
-static void
-linux_kthread_load (struct target_ops *ops, const char *prog, int fromtty)
-{
-  struct target_ops *beneath = find_target_beneath (ops);
-
-  if (debug_linuxkthread_targetops)
-    fprintf_unfiltered (gdb_stdlog, "linux_kthread_load\n");
-
-  beneath->to_load (ops, prog, fromtty);
-}
-
-/* The target_ops callback called by GDB to load the attach to an
-   already running program. Just sets 'loaded' to 1, as the program is
-   already loaded. If you attach with a non standard command, you have
-   to do 'set linux-awareness loaded 1' by hand.  */
-
-static void
-linux_kthread_attach (struct target_ops *ops, const char *prog, int fromtty)
-{
-  struct target_ops *beneath = find_target_beneath (ops);
-
-  if (debug_linuxkthread_targetops)
-    fprintf_unfiltered (gdb_stdlog, "linux_kthread_attach\n");
-
-  beneath->to_attach (ops, prog, fromtty);
-}
-
-
 /* The linux-kthread to_close target_ops method.  */
 
 static void
