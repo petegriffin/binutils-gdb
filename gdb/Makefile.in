@@ -657,7 +657,7 @@ ALL_64_TARGET_OBS = \
 
 # All other target-dependent objects files (used with --enable-targets=all).
 ALL_TARGET_OBS = \
-	armbsd-tdep.o arm.o arm-linux.o arm-linux-tdep.o \
+	armbsd-tdep.o arm.o arm-linux.o arm-linux-tdep.o arm-linux-kthread.o\
 	arm-get-next-pcs.o arm-symbian-tdep.o \
 	armnbsd-tdep.o armobsd-tdep.o \
 	arm-tdep.o arm-wince-tdep.o \
@@ -676,6 +676,7 @@ ALL_TARGET_OBS = \
 	i386-sol2-tdep.o i386-tdep.o i387-tdep.o \
 	i386-dicos-tdep.o i386-darwin-tdep.o \
 	iq2000-tdep.o \
+	linux-kthread.o \
 	linux-tdep.o \
 	lm32-tdep.o \
 	m32c-tdep.o \
@@ -990,7 +991,7 @@ common/common-exceptions.h target/target.h common/symbol.h \
 common/common-regcache.h fbsd-tdep.h nat/linux-personality.h \
 common/fileio.h nat/x86-linux.h nat/x86-linux-dregs.h nat/amd64-linux-siginfo.h\
 nat/linux-namespaces.h arch/arm.h common/gdb_sys_time.h arch/aarch64-insn.h \
-tid-parse.h ser-event.h \
+tid-parse.h ser-event.h linux-kthread.h \
 common/signals-state-save-restore.h
 
 # Header files that already have srcdir in them, or which are in objdir.
@@ -1678,7 +1679,7 @@ ALLDEPFILES = \
 	amd64-linux-nat.c amd64-linux-tdep.c \
 	amd64-sol2-tdep.c \
 	arm.c arm-get-next-pcs.c \
-	arm-linux.c arm-linux-nat.c arm-linux-tdep.c \
+	arm-linux.c arm-linux-nat.c arm-linux-tdep.c arm-linux-kthread.c \
 	arm-symbian-tdep.c arm-tdep.c \
 	armnbsd-nat.c armbsd-tdep.c armnbsd-tdep.c armobsd-tdep.c \
 	avr-tdep.c \
@@ -1712,6 +1713,7 @@ ALLDEPFILES = \
 	inf-ptrace.c \
 	ia64-libunwind-tdep.c \
 	linux-fork.c \
+	linux-kthread.c \
 	linux-tdep.c \
 	linux-record.c \
 	lm32-tdep.c \

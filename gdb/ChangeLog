@@ -1,3 +1,15 @@
+2016-12-22 Peter Griffin <peter.griffin@linaro.org>
+
+	* linux-kthread.c, linux-kthread.h, arm-linux-kthread.c,
+        arm-linux-kthread.h: New files.
+        * configure.tgt: Add linux-kthread.o and arm-linux-kthread.o to
+        gdb_target_obs.
+        * Makefile.in: Add arm-linux-kthread.o and linux-kthread.o to
+        ALL_TARGET_OBS.
+        * gdbarch.sh (linux_kthread_arch_ops): New
+        * gdbarch.c, gdbarch.h: Re-generated.
+        * arm-tdep.c (arm_gdbarch_init): Call register_arm_linux_kthread_ops.
+
 2016-10-07  Joel Brobecker  <brobecker@adacore.com>
 
 	* version.in: Set GDB version number to 7.12.

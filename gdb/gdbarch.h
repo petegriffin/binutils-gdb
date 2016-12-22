@@ -1435,6 +1435,11 @@ extern void set_gdbarch_iterate_over_objfiles_in_search_order (struct gdbarch *g
 extern struct ravenscar_arch_ops * gdbarch_ravenscar_ops (struct gdbarch *gdbarch);
 extern void set_gdbarch_ravenscar_ops (struct gdbarch *gdbarch, struct ravenscar_arch_ops * ravenscar_ops);
 
+/* Linux kthread arch-dependent ops. */
+
+extern struct linux_kthread_arch_ops * gdbarch_linux_kthread_ops (struct gdbarch *gdbarch);
+extern void set_gdbarch_linux_kthread_ops (struct gdbarch *gdbarch, struct linux_kthread_arch_ops * linux_kthread_ops);
+
 /* Return non-zero if the instruction at ADDR is a call; zero otherwise. */
 
 typedef int (gdbarch_insn_is_call_ftype) (struct gdbarch *gdbarch, CORE_ADDR addr);

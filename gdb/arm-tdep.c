@@ -48,6 +48,7 @@
 #include "arch/arm.h"
 #include "arch/arm-get-next-pcs.h"
 #include "arm-tdep.h"
+#include "arm-linux-kthread.h"
 #include "gdb/sim-arm.h"
 
 #include "elf-bfd.h"
@@ -9530,6 +9531,9 @@ arm_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   for (i = 0; i < ARRAY_SIZE (arm_register_aliases); i++)
     user_reg_add (gdbarch, arm_register_aliases[i].name,
 		  value_of_arm_user_reg, &arm_register_aliases[i].regnum);
+
+  /* Provide a Linux Kernel threads implementation. */
+  register_arm_linux_kthread_ops (gdbarch);
 
   return gdbarch;
 }

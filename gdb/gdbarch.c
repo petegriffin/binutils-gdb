@@ -325,6 +325,7 @@ struct gdbarch
   gdbarch_core_info_proc_ftype *core_info_proc;
   gdbarch_iterate_over_objfiles_in_search_order_ftype *iterate_over_objfiles_in_search_order;
   struct ravenscar_arch_ops * ravenscar_ops;
+  struct linux_kthread_arch_ops * linux_kthread_ops;
   gdbarch_insn_is_call_ftype *insn_is_call;
   gdbarch_insn_is_ret_ftype *insn_is_ret;
   gdbarch_insn_is_jump_ftype *insn_is_jump;
@@ -431,6 +432,7 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->gen_return_address = default_gen_return_address;
   gdbarch->iterate_over_objfiles_in_search_order = default_iterate_over_objfiles_in_search_order;
   gdbarch->ravenscar_ops = NULL;
+  gdbarch->linux_kthread_ops = NULL;
   gdbarch->insn_is_call = default_insn_is_call;
   gdbarch->insn_is_ret = default_insn_is_ret;
   gdbarch->insn_is_jump = default_insn_is_jump;
@@ -677,6 +679,7 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of core_info_proc, has predicate.  */
   /* Skip verify of iterate_over_objfiles_in_search_order, invalid_p == 0 */
   /* Skip verify of ravenscar_ops, invalid_p == 0 */
+  /* Skip verify of linux_kthread_ops, invalid_p == 0 */
   /* Skip verify of insn_is_call, invalid_p == 0 */
   /* Skip verify of insn_is_ret, invalid_p == 0 */
   /* Skip verify of insn_is_jump, invalid_p == 0 */
@@ -1113,6 +1116,9 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: iterate_over_regset_sections = <%s>\n",
                       host_address_to_string (gdbarch->iterate_over_regset_sections));
+  fprintf_unfiltered (file,
+                      "gdbarch_dump: linux_kthread_ops = %s\n",
+                      host_address_to_string (gdbarch->linux_kthread_ops));
   fprintf_unfiltered (file,
                       "gdbarch_dump: long_bit = %s\n",
                       plongest (gdbarch->long_bit));
@@ -4699,6 +4705,23 @@ set_gdbarch_ravenscar_ops (struct gdbarch *gdbarch,
                            struct ravenscar_arch_ops * ravenscar_ops)
 {
   gdbarch->ravenscar_ops = ravenscar_ops;
+}
+
+struct linux_kthread_arch_ops *
+gdbarch_linux_kthread_ops (struct gdbarch *gdbarch)
+{
+  gdb_assert (gdbarch != NULL);
+  /* Skip verify of linux_kthread_ops, invalid_p == 0 */
+  if (gdbarch_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "gdbarch_linux_kthread_ops called\n");
+  return gdbarch->linux_kthread_ops;
+}
+
+void
+set_gdbarch_linux_kthread_ops (struct gdbarch *gdbarch,
+                               struct linux_kthread_arch_ops * linux_kthread_ops)
+{
+  gdbarch->linux_kthread_ops = linux_kthread_ops;
 }
 
 int
