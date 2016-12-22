@@ -28,6 +28,7 @@
 #include "observer.h"
 #include "regcache.h"
 #include "target.h"
+#include "gdbcmd.h"
 
 #include "gdb_obstack.h"
 #include "macroscope.h"
@@ -1789,6 +1790,54 @@ linux_awareness_target_thread_changed (ptid_t ptid)
 /* Provide a prototype to silence -Wmissing-prototypes.  */
 extern initialize_file_ftype _initialize_linux_kthread;
 
+/* Command-list for the "set/show linuxkthread" prefix command.  */
+static struct cmd_list_element *set_linuxkthread_list;
+static struct cmd_list_element *show_linuxkthread_list;
+
+static void
+set_linuxkthread_command (char *arg, int from_tty)
+{
+  printf_unfiltered (_(\
+"\"set linuxkthread\" must be followed by the name of a setting.\n"));
+  help_list (set_linuxkthread_list, "set linuxkthread ", all_commands, gdb_stdout);
+}
+
+/* Implement the "show linuxkthread" prefix command.  */
+
+static void
+show_linuxkthread_command (char *args, int from_tty)
+{
+  cmd_show_list (show_linuxkthread_list, from_tty, "");
+}
+
+/* This function is called after load, or after attach, when we know
+   that the kernel code is in memory. (This might be called direclty
+   by the user by issuing 'set linux-kthread loaded on', if he doesn't
+   use a standard attach mechanism.  */
+
+void
+lkthread_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
+{
+  ptid_t stop_ptid;
+
+  if (debug_linuxkthread_targetops)
+    fprintf_unfiltered (gdb_stdlog, "lkthread_loaded_set (%d)\n",
+			linux_kthread_loaded);
+
+  /* If stratum already active, and user requests it to be disabled.  */
+  if (linux_kthread_active && !linux_kthread_loaded)
+    {
+      linux_kthread_deactivate ();
+    }
+  else if (!linux_kthread_active && linux_kthread_loaded)
+    {
+      /* If already disabled, and user requests it to be enabled.  */
+      stop_core = 0;
+      linux_kthread_activate (NULL);
+    }
+}
+
+
 void
 _initialize_linux_kthread (void)
 {
@@ -1797,11 +1846,28 @@ _initialize_linux_kthread (void)
 
   complete_target_initialization (linux_kthread_target ());
 
-  //  linux_kthread_data = gdbarch_data_register_pre_init (linux_kthread_init);
-
+  /* Notice when a inferior is created in order to push the
+     linuxkthread ops if needed.  */
   observer_attach_inferior_created (linux_kthread_inferior_created);
 
   target_thread_ptid = null_ptid;
   observer_attach_target_thread_changed (linux_awareness_target_thread_changed);
+
+  add_prefix_cmd ("linuxkthread", no_class, set_linuxkthread_command,
+                  _("Prefix command for changing Linuxkthread-specific settings"),
+                  &set_linuxkthread_list, "set linuxkthread ", 0, &setlist);
+
+  add_prefix_cmd ("linuxkthread", no_class, show_linuxkthread_command,
+                  _("Prefix command for showing Linuxkthread-specific settings"),
+                  &show_linuxkthread_list, "show linuxkthread ", 0, &showlist);
+
+  add_setshow_boolean_cmd ("loaded",
+			   no_class,
+			   &linux_kthread_loaded,
+			   "Enable support for Linux thread runtime",
+			   "Disable support for Linux thread runtime",
+			   NULL, &lkthread_loaded_set, NULL,
+			   &set_linuxkthread_list,
+			   &show_linuxkthread_list);
 
 }
