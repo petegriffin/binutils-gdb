@@ -197,7 +197,8 @@ struct linux_kthread_arch_ops
   int (*is_kernel_address)  (const CORE_ADDR addr);
 };
 
-
+/* Whether target_ops to_interrupt is disabled */
+extern int lkthread_disable_to_interrupt;
 
 /* Set the function that supplies registers for an inactive thread for
    architecture GDBARCH to SUPPLY_KTHREAD.  */

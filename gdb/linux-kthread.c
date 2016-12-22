@@ -63,7 +63,7 @@ static int lkthread_refresh_threadlist (int core);
 static int kthread_list_invalid;
 
 /* Whether target_ops to_interrupt is disabled */
-static int lkthread_disable_to_interrupt=0;
+int lkthread_disable_to_interrupt=0;
 
 /* Save the linux_kthreads ops returned by linux_kthread_target.  */
 static struct target_ops *linux_kthread_ops;

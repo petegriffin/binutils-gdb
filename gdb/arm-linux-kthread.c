@@ -134,8 +134,14 @@ void arm_linuxkthread_get_page_offset(CORE_ADDR *page_offset)
     }
   else
     {
-      /* kernel is compiled without macro infor so make an educated guess */
-      warning("Assuming PAGE_OFFSET is 0x%x\n", DEFAULT_PAGE_OFFSET);
+      /* Kernel is compiled without macro info so make an educated guess.  */
+      warning("Assuming PAGE_OFFSET is 0x%x. Disabling to_interrupt\n",
+	      DEFAULT_PAGE_OFFSET);
+      /* PAGE_OFFSET can't be reliably determined so disable the target_ops
+	 to_interrupt ability. This means target can onbly be halted via
+	 a breakpoint set in the kernel, which will mean CPU is configured
+	 for kernel memory view.  */
+      lkthread_disable_to_interrupt = 1;
       *page_offset = DEFAULT_PAGE_OFFSET;
     }
 
