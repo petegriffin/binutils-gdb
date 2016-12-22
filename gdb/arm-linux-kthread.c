@@ -112,7 +112,7 @@ arm_linuxkthread_store_registers (const struct regcache *regcache,
 
 }
 
-/* get_unmapped_area() in linux/mm/mmap.c */
+/* get_unmapped_area() in linux/mm/mmap.c.  */
 DECLARE_ADDR (get_unmapped_area);
 
 #define DEFAULT_PAGE_OFFSET 0xC0000000
@@ -121,13 +121,15 @@ void arm_linuxkthread_get_page_offset(CORE_ADDR *page_offset)
 {
   const char *result = NULL;
 
-  /* we can try executing a python command if it exists in the kernel source
-     result = execute_command_to_string ("lx-pageoffset", 0); */
+  /* We can try executing a python command if it exists in the kernel
+      source, and parsing the result.
+      result = execute_command_to_string ("lx-pageoffset", 0); */
 
-  /* find CONFIG_PAGE_OFFSET macro definition at get_unmapped_area symbol
-     in linux/mm/mmap.c */
+  /* Find CONFIG_PAGE_OFFSET macro definition at get_unmapped_area symbol
+     in linux/mm/mmap.c.  */
 
-  result = kthread_find_macro_at_symbol(&get_unmapped_area, "CONFIG_PAGE_OFFSET");
+  result = kthread_find_macro_at_symbol(&get_unmapped_area,
+					"CONFIG_PAGE_OFFSET");
   if (result)
     {
       *page_offset = strtol(result, (char **) NULL, 16);
